@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TalkToVideo — Audio to Captioned Video</title>
+  <meta name="description" content="Upload an MP3 or WAV audio file and instantly generate a 1920×1080 captioned video using Gemini AI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Animated background blobs -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🎬</span>
+        <span class="logo-text">TalkTo<span class="logo-accent">Video</span></span>
+      </div>
+      <p class="tagline">Turn your audio into captioned videos with Gemini AI</p>
+    </header>
+
+    <!-- Step indicator -->
+    <nav class="steps" aria-label="Progress steps">
+      <div class="step active" id="step-indicator-1">
+        <div class="step-bubble">1</div>
+        <span class="step-label">Upload</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step-indicator-2">
+        <div class="step-bubble">2</div>
+        <span class="step-label">Transcribe</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step-indicator-3">
+        <div class="step-bubble">3</div>
+        <span class="step-label">Theme</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step-indicator-4">
+        <div class="step-bubble">4</div>
+        <span class="step-label">Render</span>
+      </div>
+    </nav>
+
+    <!-- Main card -->
+    <main class="card" id="main-card">
+
+      <!-- ── STEP 1: Upload ── -->
+      <section class="panel active" id="panel-upload">
+        <h1 class="panel-title">Upload Audio</h1>
+        <p class="panel-subtitle">Supports MP3 and WAV · Max 50 MB</p>
+
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0"
+             aria-label="Drop your audio file here or click to browse">
+          <div class="drop-icon">🎵</div>
+          <p class="drop-primary">Drop your audio file here</p>
+          <p class="drop-secondary">or <span class="link-text">browse files</span></p>
+          <input type="file" id="file-input" accept=".mp3,.wav,audio/mpeg,audio/wav" hidden />
+        </div>
+
+        <div class="file-preview hidden" id="file-preview">
+          <div class="file-preview-icon">🎧</div>
+          <div class="file-preview-info">
+            <span class="file-name" id="file-name"></span>
+            <span class="file-size" id="file-size"></span>
+          </div>
+          <button class="btn-icon" id="remove-file" aria-label="Remove file">✕</button>
+        </div>
+
+        <button class="btn btn-primary" id="btn-upload" disabled>
+          <span class="btn-spinner hidden" id="upload-spinner"></span>
+          <span id="btn-upload-label">Upload &amp; Analyse</span>
+        </button>
+
+        <div class="error-box hidden" id="upload-error" role="alert"></div>
+      </section>
+
+      <!-- ── STEP 2: Transcribing ── -->
+      <section class="panel" id="panel-transcribe">
+        <h2 class="panel-title">Transcribing Audio…</h2>
+        <p class="panel-subtitle">Gemini is listening to your audio</p>
+        <div class="loader-ring" aria-label="Loading"></div>
+        <p class="loader-status" id="transcribe-status">Uploading to Gemini…</p>
+      </section>
+
+      <!-- ── STEP 3: Theme ── -->
+      <section class="panel" id="panel-theme">
+        <h2 class="panel-title">Choose a Theme</h2>
+        <p class="panel-subtitle">Select the visual style for your video</p>
+
+        <div class="theme-grid" id="theme-grid" role="radiogroup" aria-label="Theme presets">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="transcript-preview">
+          <h3 class="preview-label">Transcript Preview</h3>
+          <div class="transcript-scroll" id="transcript-scroll"></div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-render">
+          <span class="btn-spinner hidden" id="render-spinner"></span>
+          <span id="btn-render-label">🎬 Render Video</span>
+        </button>
+        <div class="error-box hidden" id="render-error" role="alert"></div>
+      </section>
+
+      <!-- ── STEP 4: Rendering ── -->
+      <section class="panel" id="panel-render">
+        <h2 class="panel-title">Rendering Video…</h2>
+        <p class="panel-subtitle">FFmpeg is composing your captioned masterpiece</p>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p class="progress-label" id="progress-label">0%</p>
+
+        <div class="done-box hidden" id="done-box">
+          <div class="done-icon">🎉</div>
+          <h3 class="done-title">Your video is ready!</h3>
+          <p class="done-sub">1920 × 1080 · MP4 · Captioned</p>
+          <a class="btn btn-primary" id="download-link" download>⬇ Download Video</a>
+          <button class="btn btn-ghost" id="btn-restart">Make Another</button>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      Powered by <strong>Gemini AI</strong> &amp; <strong>FFmpeg</strong>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
