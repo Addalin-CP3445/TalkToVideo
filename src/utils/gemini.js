@@ -23,11 +23,10 @@ function getClient() {
  */
 async function uploadFile(localPath, mimeType) {
   const ai = getClient();
-  const fileStream = fs.createReadStream(localPath);
   const fileName = require('path').basename(localPath);
 
   const uploadedFile = await ai.files.upload({
-    file: fileStream,
+    file: localPath,
     config: {
       mimeType,
       displayName: fileName,
