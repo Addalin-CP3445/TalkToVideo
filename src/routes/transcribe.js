@@ -1,12 +1,12 @@
 const express = require('express');
-const { transcribeAudio } = require('../utils/gemini');
+const { transcribeAudio, generateScenes } = require('../utils/gemini');
 
 const router = express.Router();
 
 /**
  * POST /api/transcribe
  * Body: { fileUri: string, mimeType: string }
- * Response: { segments: Array<{ start, end, text }> }
+ * Response: { segments: Array<{ start, end, text }>, scenes: Array<{ start, end, searchQuery }> }
  */
 router.post('/', async (req, res) => {
   const { fileUri, mimeType } = req.body;
@@ -17,7 +17,8 @@ router.post('/', async (req, res) => {
 
   try {
     const segments = await transcribeAudio(fileUri, mimeType);
-    res.json({ segments });
+    const scenes = await generateScenes(segments);
+    res.json({ segments, scenes });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

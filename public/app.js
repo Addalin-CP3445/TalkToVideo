@@ -6,6 +6,7 @@ const state = {
   geminiName: null,
   mimeType: null,
   segments: [],
+  scenes: [],
   selectedTheme: 'dark-minimal',
   jobId: null,
 };
@@ -34,6 +35,7 @@ const progressFill    = $('progress-fill');
 const progressLabel   = $('progress-label');
 const doneBox         = $('done-box');
 const downloadLink    = $('download-link');
+const creditsLink     = $('credits-link');
 const btnRestart      = $('btn-restart');
 
 /* ── Step management ───────────────────────────────────── */
@@ -140,11 +142,13 @@ btnUpload.addEventListener('click', async () => {
     if (!transcribeRes.ok) throw new Error(transcribeData.error || 'Transcription failed');
 
     state.segments = transcribeData.segments;
+    state.scenes   = transcribeData.scenes || [];
     transcribeStatus.textContent = `Done! Found ${state.segments.length} segments.`;
 
     // 4. Load themes and show theme panel
     await loadThemes();
     renderTranscriptPreview();
+    renderScenesList();
     showPanel('theme');
 
   } catch (err) {
@@ -201,6 +205,25 @@ function renderTranscriptPreview() {
   }).join('');
 }
 
+/* ── Scenes preview ────────────────────────────────────── */
+function renderScenesList() {
+  const container = $('scenes-preview-container');
+  const list = $('scenes-list');
+  if (!state.scenes || state.scenes.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  list.innerHTML = state.scenes.map((scene, idx) => {
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px; gap: 15px;">
+        <span style="color: rgba(255,255,255,0.8);">🎬 Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
+        <span style="font-weight: 600; color: #00ffcc; text-align: right;">"${escapeHtml(scene.searchQuery)}"</span>
+      </div>
+    `;
+  }).join('');
+}
+
 /* ── Render ────────────────────────────────────────────── */
 btnRender.addEventListener('click', async () => {
   setLoading(btnRender, renderSpinner, btnRenderLabel, true, 'Starting…');
@@ -214,6 +237,7 @@ btnRender.addEventListener('click', async () => {
         localPath: state.localPath,
         segments: state.segments,
         theme: state.selectedTheme,
+        scenes: state.scenes,
       }),
     });
     const renderData = await renderRes.json();
@@ -249,6 +273,16 @@ function listenProgress(jobId) {
       progressLabel.textContent = '100%';
       downloadLink.href = `/api/download/${data.filename}`;
       downloadLink.download = data.filename;
+
+      if (state.scenes && state.scenes.length > 0) {
+        const creditsFilename = data.filename.replace('.mp4', '_credits.txt');
+        creditsLink.href = `/api/download/${creditsFilename}`;
+        creditsLink.download = creditsFilename;
+        creditsLink.classList.remove('hidden');
+      } else {
+        creditsLink.classList.add('hidden');
+      }
+
       doneBox.classList.remove('hidden');
     }
 
@@ -271,13 +305,14 @@ btnRestart.addEventListener('click', () => {
   Object.assign(state, {
     file: null, localPath: null, fileUri: null,
     geminiName: null, mimeType: null, segments: [],
-    selectedTheme: 'dark-minimal', jobId: null,
+    scenes: [], selectedTheme: 'dark-minimal', jobId: null,
   });
   fileInput.value = '';
   filePreview.classList.add('hidden');
   dropZone.classList.remove('hidden');
   btnUpload.disabled = true;
   doneBox.classList.add('hidden');
+  creditsLink.classList.add('hidden');
   progressFill.style.width = '0%';
   progressLabel.textContent = '0%';
   showPanel('upload');

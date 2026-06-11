@@ -103,6 +103,13 @@
           <!-- Populated by JS -->
         </div>
 
+        <div class="scenes-preview hidden" id="scenes-preview-container" style="margin-top: 1.5rem; text-align: left;">
+          <h3 class="preview-label" style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Automated Background Scenes</h3>
+          <div id="scenes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
         <div class="transcript-preview">
           <h3 class="preview-label">Transcript Preview</h3>
           <div class="transcript-scroll" id="transcript-scroll"></div>
@@ -129,8 +136,11 @@
           <div class="done-icon">🎉</div>
           <h3 class="done-title">Your video is ready!</h3>
           <p class="done-sub">1920 × 1080 · MP4 · Captioned</p>
-          <a class="btn btn-primary" id="download-link" download>⬇ Download Video</a>
-          <button class="btn btn-ghost" id="btn-restart">Make Another</button>
+          <div style="display: flex; flex-direction: column; gap: 10px; align-items: center; width: 100%; max-width: 320px; margin: 1.5rem auto 0;">
+            <a class="btn btn-primary" id="download-link" download style="width: 100%; display: inline-flex; justify-content: center; align-items: center; text-decoration: none;">⬇ Download Video</a>
+            <a class="btn btn-secondary hidden" id="credits-link" download style="width: 100%; display: inline-flex; justify-content: center; align-items: center; text-decoration: none; background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255,255,255,0.15); font-weight: 500;">📄 Download Credits (.txt)</a>
+            <button class="btn btn-ghost" id="btn-restart" style="width: 100%;">Make Another</button>
+          </div>
         </div>
       </section>
 

@@ -109,6 +109,64 @@ Example:
 }
 
 /**
+ * Analyze transcript segments and generate thematic scenes with Pexels search queries.
+ * @param {Array<{ start: number, end: number, text: string }>} segments
+ * @returns {Promise<Array<{ start: number, end: number, searchQuery: string }>>}
+ */
+async function generateScenes(segments) {
+  if (!segments || segments.length === 0) {
+    return [];
+  }
+  
+  const ai = getClient();
+  const transcriptText = segments
+    .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s] ${s.text}`)
+    .join('\n');
+
+  const prompt = `You are a video director. Analyze the following audio transcript with timestamps.
+Segment the transcript into a sequence of chronological "visual scenes" that flow naturally.
+Each scene should represent a visual theme.
+Guidelines:
+1. Cover the entire duration of the audio (from 0s to the end of the last segment).
+2. The duration of each scene should ideally be between 8 and 25 seconds.
+3. For each scene, write:
+   - "start": the start time in seconds (number)
+   - "end": the end time in seconds (number)
+   - "searchQuery": a 2-4 word visual search keyword/phrase in English to search for a looping background video on Pexels (e.g. "technology AI brain", "nature forest sunlight", "person typing laptop", "abstract glowing background"). Use generic but descriptive search terms.
+
+Return ONLY a raw JSON array of scenes, no markdown code fences, no explanation.
+
+Here is the transcript:
+${transcriptText}
+
+Example Output:
+[
+  {"start": 0, "end": 12.5, "searchQuery": "technology AI brain"},
+  {"start": 12.5, "end": 30.0, "searchQuery": "office computer typing"}
+]`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  });
+
+  const raw = response.text.trim();
+  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+  let scenes;
+  try {
+    scenes = JSON.parse(clean);
+  } catch (e) {
+    throw new Error(`Failed to parse scene segmentation JSON: ${e.message}\nRaw: ${raw}`);
+  }
+
+  if (!Array.isArray(scenes)) throw new Error('Scene segmentation is not an array');
+  return scenes.filter(
+    (s) => typeof s.start === 'number' && typeof s.end === 'number' && typeof s.searchQuery === 'string'
+  );
+}
+
+/**
  * Delete a file from the Gemini File API (cleanup).
  * @param {string} fileName - The file name from uploadFile()
  */
@@ -121,4 +179,4 @@ async function deleteFile(fileName) {
   }
 }
 
-module.exports = { uploadFile, transcribeAudio, deleteFile };
+module.exports = { uploadFile, transcribeAudio, generateScenes, deleteFile };
