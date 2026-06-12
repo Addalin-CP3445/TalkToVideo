@@ -37,6 +37,9 @@ const doneBox         = $('done-box');
 const downloadLink    = $('download-link');
 const creditsLink     = $('credits-link');
 const btnRestart      = $('btn-restart');
+const btnDebug        = $('btn-debug');
+const btnDebugLabel   = $('btn-debug-label');
+const debugSpinner    = $('debug-spinner');
 
 /* ── Step management ───────────────────────────────────── */
 const PANELS = ['upload', 'transcribe', 'theme', 'render'];
@@ -106,6 +109,40 @@ function handleFile(file) {
   filePreview.classList.remove('hidden');
   btnUpload.disabled = false;
 }
+
+/* ── Debug Mode ────────────────────────────────────────── */
+btnDebug.addEventListener('click', async () => {
+  setLoading(btnDebug, debugSpinner, btnDebugLabel, true, 'Loading mock data…');
+  hideError(uploadError);
+
+  try {
+    const res = await fetch('/api/debug/mock');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Debug endpoint failed');
+
+    // Inject mock state — no Gemini API calls made
+    state.localPath     = data.localPath;
+    state.fileUri       = null;
+    state.geminiName    = null;
+    state.mimeType      = 'audio/mpeg';
+    state.segments      = data.segments;
+    state.scenes        = data.scenes;
+
+    // Show fake file info in the preview (optional, cosmetic)
+    fileNameEl.textContent = data.originalName;
+    fileSizeEl.textContent = formatBytes(data.size);
+
+    await loadThemes();
+    renderTranscriptPreview();
+    renderScenesList();
+    showPanel('theme');
+
+  } catch (err) {
+    showError(uploadError, '🧪 Debug mode error: ' + err.message);
+  } finally {
+    setLoading(btnDebug, debugSpinner, btnDebugLabel, false, '🧪 Debug Mode (skip Gemini)');
+  }
+});
 
 /* ── Upload & transcribe ───────────────────────────────── */
 btnUpload.addEventListener('click', async () => {

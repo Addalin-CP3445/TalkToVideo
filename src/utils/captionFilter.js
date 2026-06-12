@@ -53,50 +53,94 @@ const THEMES = {
   },
 };
 
+/** Maximum words allowed per caption line before wrapping to the next. */
+const MAX_WORDS_PER_LINE = 7;
+
 /**
- * Build an FFmpeg drawtext filter expression for a single caption segment.
- * Uses `enable='between(t,start,end)'` for timed display.
- *
- * @param {Object} segment  - { start, end, text }
- * @param {Object} theme    - theme config from THEMES
- * @param {number} width    - video width (1920)
- * @param {number} height   - video height (1080)
- * @returns {string}        - FFmpeg filter fragment
+ * Escape FFmpeg special characters in a text string.
+ * @param {string} text
+ * @returns {string}
  */
-function buildDrawtextFilter(segment, theme, width = 1920, height = 1080) {
-  // Escape FFmpeg special characters in the text
-  const escaped = segment.text
+function escapeFFmpeg(text) {
+  return text
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/:/g, '\\:')
     .replace(/\[/g, '\\[')
     .replace(/\]/g, '\\]');
+}
 
-  const fontSizeStr = theme.fontSize.toString();
-  const y = Math.round(height * 0.82); // caption band at 82% height
-
-  let filter = `drawtext=text='${escaped}'`;
-  filter += `:fontcolor=${theme.fontColor}`;
-  filter += `:fontsize=${fontSizeStr}`;
-  filter += `:x=(w-text_w)/2`;          // horizontally centered
-  filter += `:y=${y}`;
-  filter += `:shadowcolor=${theme.shadowColor}`;
-  filter += `:shadowx=${theme.shadowX}`;
-  filter += `:shadowy=${theme.shadowY}`;
-  filter += `:box=1`;
-  filter += `:boxcolor=${theme.boxColor}`;
-  filter += `:boxborderw=18`;
-  filter += `:enable='between(t,${segment.start},${segment.end})'`;
-
-  if (theme.fontFile) {
-    filter += `:fontfile='${theme.fontFile}'`;
+/**
+ * Split a text string into lines of at most MAX_WORDS_PER_LINE words each.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function wrapText(text) {
+  const words = text.trim().split(/\s+/);
+  const lines = [];
+  for (let i = 0; i < words.length; i += MAX_WORDS_PER_LINE) {
+    lines.push(words.slice(i, i + MAX_WORDS_PER_LINE).join(' '));
   }
+  return lines.length > 0 ? lines : [''];
+}
 
-  return filter;
+/**
+ * Build one or more FFmpeg drawtext filter expressions for a single caption segment.
+ * Long text is automatically wrapped into multiple lines stacked vertically.
+ *
+ * @param {Object} segment  - { start, end, text }
+ * @param {Object} theme    - theme config from THEMES
+ * @param {number} width    - video width (1920)
+ * @param {number} height   - video height (1080)
+ * @returns {string[]}      - array of FFmpeg drawtext filter strings (one per line)
+ */
+function buildDrawtextFilters(segment, theme, width = 1920, height = 1080) {
+  const lines = wrapText(segment.text);
+  const fontSize = theme.fontSize;
+
+  // Line height includes font size + comfortable padding between lines
+  const lineHeight = Math.round(fontSize * 1.35);
+
+  // Bottom anchor: the bottom of the last line sits at 88% of height
+  const bottomY = Math.round(height * 0.88);
+
+  // Total block height for all lines
+  const blockHeight = lineHeight * lines.length;
+
+  // Top-left Y of the first line
+  const topY = bottomY - blockHeight;
+
+  const enable = `enable='between(t,${segment.start},${segment.end})'`;
+  const fontSizeStr = fontSize.toString();
+
+  return lines.map((line, idx) => {
+    const escaped = escapeFFmpeg(line);
+    const y = topY + idx * lineHeight;
+
+    let filter = `drawtext=text='${escaped}'`;
+    filter += `:fontcolor=${theme.fontColor}`;
+    filter += `:fontsize=${fontSizeStr}`;
+    filter += `:x=(w-text_w)/2`;       // horizontally centered
+    filter += `:y=${y}`;
+    filter += `:shadowcolor=${theme.shadowColor}`;
+    filter += `:shadowx=${theme.shadowX}`;
+    filter += `:shadowy=${theme.shadowY}`;
+    filter += `:box=1`;
+    filter += `:boxcolor=${theme.boxColor}`;
+    filter += `:boxborderw=18`;
+    filter += `:${enable}`;
+
+    if (theme.fontFile) {
+      filter += `:fontfile='${theme.fontFile}'`;
+    }
+
+    return filter;
+  });
 }
 
 /**
  * Build the complete FFmpeg video_filter string for all caption segments.
+ * Each segment may produce multiple drawtext filters if the text wraps.
  *
  * @param {Array}  segments - array of { start, end, text }
  * @param {string} themeKey - key into THEMES
@@ -107,7 +151,7 @@ function buildDrawtextFilter(segment, theme, width = 1920, height = 1080) {
 function buildCaptionFilter(segments, themeKey, width = 1920, height = 1080) {
   const theme = THEMES[themeKey] || THEMES['dark-minimal'];
   return segments
-    .map((seg) => buildDrawtextFilter(seg, theme, width, height))
+    .flatMap((seg) => buildDrawtextFilters(seg, theme, width, height))
     .join(',');
 }
 

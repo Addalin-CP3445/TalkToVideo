@@ -22,6 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/upload', require('./src/routes/upload'));
 app.use('/api/transcribe', require('./src/routes/transcribe'));
 app.use('/api/render', require('./src/routes/render'));
+app.use('/api/debug', require('./src/routes/debug'));
 
 // Download endpoint
 app.get('/api/download/:filename', (req, res) => {
