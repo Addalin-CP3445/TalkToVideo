@@ -3,13 +3,27 @@ const fs = require('fs');
 
 /**
  * Get an initialized Gemini client.
- * Throws a descriptive error if the API key is missing.
+ * Supports both Vertex AI (via Service Account JSON) and AI Studio (via API key).
  */
 function getClient() {
+  const vertexProject = process.env.VERTEX_PROJECT;
+  const vertexLocation = process.env.VERTEX_LOCATION;
+
+  if (vertexProject && vertexLocation) {
+    // When using Vertex AI, the SDK automatically picks up the Service Account JSON
+    // from the GOOGLE_APPLICATION_CREDENTIALS environment variable.
+    return new GoogleGenAI({
+      vertexai: {
+        project: vertexProject,
+        location: vertexLocation,
+      },
+    });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
     throw new Error(
-      'GEMINI_API_KEY is not configured. Copy .env.example to .env and set your key.'
+      'Authentication not configured. For Vertex AI, set GOOGLE_APPLICATION_CREDENTIALS, VERTEX_PROJECT, and VERTEX_LOCATION. For AI Studio, set GEMINI_API_KEY.'
     );
   }
   return new GoogleGenAI({ apiKey });
