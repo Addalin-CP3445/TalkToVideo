@@ -173,7 +173,7 @@ btnUpload.addEventListener('click', async () => {
     const transcribeRes = await fetch('/api/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileUri: state.fileUri, mimeType: state.mimeType }),
+      body: JSON.stringify({ fileUri: state.fileUri, mimeType: state.mimeType, localPath: state.localPath }),
     });
     const transcribeData = await transcribeRes.json();
     if (!transcribeRes.ok) throw new Error(transcribeData.error || 'Transcription failed');

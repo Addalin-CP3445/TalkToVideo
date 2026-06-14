@@ -1,29 +1,40 @@
 const { GoogleGenAI } = require('@google/genai');
+const { GoogleAuth } = require('google-auth-library');
 const fs = require('fs');
 
 /**
  * Get an initialized Gemini client.
- * Supports both Vertex AI (via Service Account JSON) and AI Studio (via API key).
+ * Supports both Gemini Enterprise Agent Platform (Service Account JSON) and AI Studio (API key).
  */
 function getClient() {
-  const vertexProject = process.env.VERTEX_PROJECT;
+  const vertexProject  = process.env.VERTEX_PROJECT;
   const vertexLocation = process.env.VERTEX_LOCATION;
+  const credFile       = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
   if (vertexProject && vertexLocation) {
-    // When using Vertex AI, the SDK automatically picks up the Service Account JSON
-    // from the GOOGLE_APPLICATION_CREDENTIALS environment variable.
+    if (!credFile || !fs.existsSync(credFile)) {
+      throw new Error(
+        `GOOGLE_APPLICATION_CREDENTIALS is not set or file not found ("${credFile}"). ` +
+        'Download your Service Account JSON from Google Cloud Console and set the path in .env.'
+      );
+    }
+    // Explicitly pass the service account auth so oauth2 tokens are always injected.
+    const auth = new GoogleAuth({
+      keyFile: credFile,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
     return new GoogleGenAI({
-      vertexai: {
-        project: vertexProject,
-        location: vertexLocation,
-      },
+      enterprise: true,
+      project: vertexProject,
+      location: vertexLocation,
+      auth,
     });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
     throw new Error(
-      'Authentication not configured. For Vertex AI, set GOOGLE_APPLICATION_CREDENTIALS, VERTEX_PROJECT, and VERTEX_LOCATION. For AI Studio, set GEMINI_API_KEY.'
+      'Authentication not configured. For Gemini Enterprise, set GOOGLE_APPLICATION_CREDENTIALS, VERTEX_PROJECT, and VERTEX_LOCATION. For AI Studio, set GEMINI_API_KEY.'
     );
   }
   return new GoogleGenAI({ apiKey });
@@ -36,8 +47,15 @@ function getClient() {
  * @returns {Promise<{ uri: string, name: string }>}
  */
 async function uploadFile(localPath, mimeType) {
-  const ai = getClient();
+  const isVertex = process.env.VERTEX_PROJECT && process.env.VERTEX_LOCATION;
   const fileName = require('path').basename(localPath);
+
+  if (isVertex) {
+    // Vertex AI does not support ai.files.upload. We will use inline base64 instead.
+    return { uri: 'VERTEX_INLINE', name: fileName };
+  }
+
+  const ai = getClient();
 
   const uploadedFile = await ai.files.upload({
     file: localPath,
@@ -65,9 +83,10 @@ async function uploadFile(localPath, mimeType) {
  * Transcribe an audio file already uploaded to the Gemini File API.
  * @param {string} fileUri  - The file URI from uploadFile()
  * @param {string} mimeType - 'audio/mpeg' or 'audio/wav'
+ * @param {string} [localPath] - Optional local path for Vertex AI inline upload
  * @returns {Promise<Array<{ start: number, end: number, text: string }>>}
  */
-async function transcribeAudio(fileUri, mimeType) {
+async function transcribeAudio(fileUri, mimeType, localPath) {
   const ai = getClient();
 
   const prompt = `You are a precise audio transcription assistant.
@@ -83,18 +102,33 @@ Return ONLY the raw JSON array, no markdown, no explanation.
 Example:
 [{"start":0,"end":2.5,"text":"Hello and welcome"},{"start":2.6,"end":5.1,"text":"to this presentation"}]`;
 
+  // Use inline base64 for Vertex AI, otherwise use the File API URI
+  let filePart;
+  if (fileUri === 'VERTEX_INLINE') {
+    if (!localPath) throw new Error('localPath is required for Vertex AI inline transcription.');
+    const fileData = fs.readFileSync(localPath);
+    filePart = {
+      inlineData: {
+        data: fileData.toString('base64'),
+        mimeType,
+      },
+    };
+  } else {
+    filePart = {
+      fileData: {
+        mimeType,
+        fileUri,
+      },
+    };
+  }
+
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: [
       {
         role: 'user',
         parts: [
-          {
-            fileData: {
-              mimeType,
-              fileUri,
-            },
-          },
+          filePart,
           { text: prompt },
         ],
       },
