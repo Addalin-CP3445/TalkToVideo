@@ -80,6 +80,32 @@ async function uploadFile(localPath, mimeType) {
 }
 
 /**
+ * Robustly extract the first JSON array from a raw model response string.
+ * This handles cases where the model adds preamble text, markdown fences,
+ * or trailing explanation text around the JSON.
+ * @param {string} raw
+ * @returns {any[]} - parsed array
+ */
+function extractJsonArray(raw) {
+  const start = raw.indexOf('[');
+  if (start === -1) throw new Error('No JSON array found in model response.');
+
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < raw.length; i++) {
+    if (raw[i] === '[') depth++;
+    else if (raw[i] === ']') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) throw new Error('JSON array is not closed in model response.');
+
+  const jsonStr = raw.slice(start, end + 1);
+  return JSON.parse(jsonStr);
+}
+
+/**
  * Transcribe an audio file already uploaded to the Gemini File API.
  * @param {string} fileUri  - The file URI from uploadFile()
  * @param {string} mimeType - 'audio/mpeg' or 'audio/wav'
@@ -135,16 +161,12 @@ Example:
     ],
   });
 
-  const raw = response.text.trim();
-
-  // Strip markdown code fences if model wraps in them
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
+  const raw = response.text;
   let segments;
   try {
-    segments = JSON.parse(clean);
+    segments = extractJsonArray(raw);
   } catch (e) {
-    throw new Error(`Failed to parse Gemini transcript JSON: ${e.message}\nRaw: ${raw.slice(0, 300)}`);
+    throw new Error(`Failed to parse Gemini transcript JSON: ${e.message}\nRaw snippet: ${raw.slice(0, 400)}`);
   }
 
   // Validate shape
@@ -198,14 +220,12 @@ Example Output:
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
   });
 
-  const raw = response.text.trim();
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
+  const raw = response.text;
   let scenes;
   try {
-    scenes = JSON.parse(clean);
+    scenes = extractJsonArray(raw);
   } catch (e) {
-    throw new Error(`Failed to parse scene segmentation JSON: ${e.message}\nRaw: ${raw}`);
+    throw new Error(`Failed to parse scene segmentation JSON: ${e.message}\nRaw snippet: ${raw.slice(0, 400)}`);
   }
 
   if (!Array.isArray(scenes)) throw new Error('Scene segmentation is not an array');

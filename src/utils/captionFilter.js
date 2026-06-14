@@ -53,21 +53,18 @@ const THEMES = {
   },
 };
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+
 /** Maximum words allowed per caption line before wrapping to the next. */
 const MAX_WORDS_PER_LINE = 7;
 
-/**
- * Escape FFmpeg special characters in a text string.
- * @param {string} text
- * @returns {string}
- */
+// textfile is much safer than text for complex string escaping. We don't need this complex escaping anymore,
+// but keep it around just in case.
 function escapeFFmpeg(text) {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/:/g, '\\:')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]');
+  return text; // textfile reads raw content, no escaping needed
 }
 
 /**
@@ -92,9 +89,10 @@ function wrapText(text) {
  * @param {Object} theme    - theme config from THEMES
  * @param {number} width    - video width (1920)
  * @param {number} height   - video height (1080)
+ * @param {Array} tempFiles - Array to push temp text files into for cleanup
  * @returns {string[]}      - array of FFmpeg drawtext filter strings (one per line)
  */
-function buildDrawtextFilters(segment, theme, width = 1920, height = 1080) {
+function buildDrawtextFilters(segment, theme, width = 1920, height = 1080, tempFiles = []) {
   const lines = wrapText(segment.text);
   const fontSize = theme.fontSize;
 
@@ -110,14 +108,25 @@ function buildDrawtextFilters(segment, theme, width = 1920, height = 1080) {
   // Top-left Y of the first line
   const topY = bottomY - blockHeight;
 
-  const enable = `enable='between(t,${segment.start},${segment.end})'`;
+  const enable = `enable=between(t\\,${segment.start.toFixed(3)}\\,${segment.end.toFixed(3)})`;
   const fontSizeStr = fontSize.toString();
 
   return lines.map((line, idx) => {
-    const escaped = escapeFFmpeg(line);
+    // Write text to a temporary file to avoid ffmpeg quoting nightmares
+    const textFilePath = path.join(os.tmpdir(), `ttv_txt_${uuidv4()}.txt`);
+    fs.writeFileSync(textFilePath, line, 'utf8');
+    tempFiles.push(textFilePath);
+    
+    // Windows paths contain backslashes and colons (C:\...). FFmpeg handles forward slashes.
+    // Also, inside filter arguments, colons MUST be escaped if not using quotes, but with textfile='path'
+    // single quotes are safer, though we must still escape the colon after drive letter.
+    let safePath = textFilePath.replace(/\\/g, '/');
+    // Escape colons in the path (e.g. C:/ -> C\:/)
+    safePath = safePath.replace(/:/g, '\\:');
+
     const y = topY + idx * lineHeight;
 
-    let filter = `drawtext=text='${escaped}'`;
+    let filter = `drawtext=textfile='${safePath}'`;
     filter += `:fontcolor=${theme.fontColor}`;
     filter += `:fontsize=${fontSizeStr}`;
     filter += `:x=(w-text_w)/2`;       // horizontally centered
@@ -146,12 +155,13 @@ function buildDrawtextFilters(segment, theme, width = 1920, height = 1080) {
  * @param {string} themeKey - key into THEMES
  * @param {number} width
  * @param {number} height
+ * @param {Array} tempFiles
  * @returns {string}        - comma-joined drawtext filter chain
  */
-function buildCaptionFilter(segments, themeKey, width = 1920, height = 1080) {
+function buildCaptionFilter(segments, themeKey, width = 1920, height = 1080, tempFiles = []) {
   const theme = THEMES[themeKey] || THEMES['dark-minimal'];
   return segments
-    .flatMap((seg) => buildDrawtextFilters(seg, theme, width, height))
+    .flatMap((seg) => buildDrawtextFilters(seg, theme, width, height, tempFiles))
     .join(',');
 }
 
