@@ -6,3 +6,4 @@ outputs/
 *.wav
 *.mp4
 gdg-project.json
+venv/*

@@ -1,6 +1,11 @@
 const { GoogleGenAI } = require('@google/genai');
 const { GoogleAuth } = require('google-auth-library');
 const fs = require('fs');
+const { exec } = require('child_process');
+const path = require('path');
+const util = require('util');
+const execPromise = util.promisify(exec);
+
 
 /**
  * Get an initialized Gemini client.
@@ -106,67 +111,41 @@ function extractJsonArray(raw) {
 }
 
 /**
- * Transcribe an audio file already uploaded to the Gemini File API.
- * @param {string} fileUri  - The file URI from uploadFile()
- * @param {string} mimeType - 'audio/mpeg' or 'audio/wav'
- * @param {string} [localPath] - Optional local path for Vertex AI inline upload
+ * Transcribe an audio file using local faster-whisper model.
+ * @param {string} fileUri  - (Unused) The file URI from uploadFile()
+ * @param {string} mimeType - (Unused) 'audio/mpeg' or 'audio/wav'
+ * @param {string} localPath - Absolute path to the local audio file
  * @returns {Promise<Array<{ start: number, end: number, text: string }>>}
  */
 async function transcribeAudio(fileUri, mimeType, localPath) {
-  const ai = getClient();
-
-  const prompt = `You are a precise audio transcription assistant.
-Listen to this audio file and return a JSON array of transcript segments.
-Each segment must have:
-  - "start": start time in seconds (number, e.g. 0.5)
-  - "end": end time in seconds (number, e.g. 3.2)
-  - "text": the spoken words in that segment (string)
-
-Split segments at natural pauses or every 5–8 words maximum so captions are readable.
-Return ONLY the raw JSON array, no markdown, no explanation.
-
-Example:
-[{"start":0,"end":2.5,"text":"Hello and welcome"},{"start":2.6,"end":5.1,"text":"to this presentation"}]`;
-
-  // Use inline base64 for Vertex AI, otherwise use the File API URI
-  let filePart;
-  if (fileUri === 'VERTEX_INLINE') {
-    if (!localPath) throw new Error('localPath is required for Vertex AI inline transcription.');
-    const fileData = fs.readFileSync(localPath);
-    filePart = {
-      inlineData: {
-        data: fileData.toString('base64'),
-        mimeType,
-      },
-    };
-  } else {
-    filePart = {
-      fileData: {
-        mimeType,
-        fileUri,
-      },
-    };
+  if (!localPath) {
+    throw new Error('localPath is required for faster-whisper transcription.');
   }
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          filePart,
-          { text: prompt },
-        ],
-      },
-    ],
-  });
+  const pythonScript = path.join(__dirname, 'transcribe.py');
+  const venvPython = path.join(__dirname, '../../venv/Scripts/python.exe');
 
-  const raw = response.text;
+  let stdoutRaw = '';
+  try {
+    const { stdout, stderr } = await execPromise(`"${venvPython}" "${pythonScript}" "${localPath}"`);
+    stdoutRaw = stdout;
+  } catch (e) {
+    throw new Error(`faster-whisper transcription failed: ${e.message}`);
+  }
+
   let segments;
   try {
-    segments = extractJsonArray(raw);
+    // We use extractJsonArray because the python script might print warnings before the JSON
+    segments = extractJsonArray(stdoutRaw);
   } catch (e) {
-    throw new Error(`Failed to parse Gemini transcript JSON: ${e.message}\nRaw snippet: ${raw.slice(0, 400)}`);
+    // Handle script errors that are printed as JSON
+    try {
+      const parsedErr = JSON.parse(stdoutRaw);
+      if (parsedErr && parsedErr.error) {
+        throw new Error(parsedErr.error);
+      }
+    } catch (_) {}
+    throw new Error(`Failed to parse faster-whisper JSON: ${e.message}\nRaw output: ${stdoutRaw.slice(0, 400)}`);
   }
 
   // Validate shape
