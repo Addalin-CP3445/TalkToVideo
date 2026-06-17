@@ -172,16 +172,22 @@ async function generateScenes(segments) {
     .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s] ${s.text}`)
     .join('\n');
 
-  const prompt = `You are a video director. Analyze the following audio transcript with timestamps.
+const prompt = `You are a video director. Analyze the following audio transcript with timestamps.
 Segment the transcript into a sequence of chronological "visual scenes" that flow naturally.
 Each scene should represent a visual theme.
 Guidelines:
 1. Cover the entire duration of the audio (from 0s to the end of the last segment).
 2. The duration of each scene should ideally be between 8 and 25 seconds.
-3. For each scene, write:
+3. You have TWO types of scenes you can generate: "video" and "slide".
+   - Use "video" for standard B-roll footage representing the context.
+   - Use "slide" when the audio discusses a formula, specific mathematical concept, an important list of bullet points, or complex definitions that the user needs to read on screen.
+4. For each scene, write:
    - "start": the start time in seconds (number)
    - "end": the end time in seconds (number)
-   - "searchQuery": a 2-4 word visual search keyword/phrase in English to search for a looping background video on Pexels (e.g. "technology AI brain", "nature forest sunlight", "person typing laptop", "abstract glowing background"). Use generic but descriptive search terms.
+   - "type": either "video" or "slide"
+   - "context": a short string containing the actual spoken words in this segment
+   - If type is "video", include: "searchQuery": a 2-4 word visual search keyword in English for a looping background video on Pexels (e.g. "technology AI brain", "nature forest").
+   - If type is "slide", include: "slideText": the text (like a formula, bullet points, or key phrase) to display on the slide. Use \n for newlines. Keep it concise.
 
 Return ONLY a raw JSON array of scenes, no markdown code fences, no explanation.
 
@@ -190,8 +196,8 @@ ${transcriptText}
 
 Example Output:
 [
-  {"start": 0, "end": 12.5, "searchQuery": "technology AI brain"},
-  {"start": 12.5, "end": 30.0, "searchQuery": "office computer typing"}
+  {"start": 0, "end": 12.5, "type": "video", "context": "Hello and welcome to this course...", "searchQuery": "technology AI brain"},
+  {"start": 12.5, "end": 30.0, "type": "slide", "context": "The formula for energy is E equals m c squared.", "slideText": "Energy-Mass Equivalence\n\nE = mc²"}
 ]`;
 
   const response = await ai.models.generateContent({
@@ -209,7 +215,7 @@ Example Output:
 
   if (!Array.isArray(scenes)) throw new Error('Scene segmentation is not an array');
   return scenes.filter(
-    (s) => typeof s.start === 'number' && typeof s.end === 'number' && typeof s.searchQuery === 'string'
+    (s) => typeof s.start === 'number' && typeof s.end === 'number' && typeof s.type === 'string'
   );
 }
 
@@ -226,4 +232,4 @@ async function deleteFile(fileName) {
   }
 }
 
-module.exports = { uploadFile, transcribeAudio, generateScenes, deleteFile };
+module.exports = { getClient, uploadFile, transcribeAudio, generateScenes, deleteFile };

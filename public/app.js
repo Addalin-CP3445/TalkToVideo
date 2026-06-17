@@ -27,6 +27,7 @@ const uploadError     = $('upload-error');
 const transcribeStatus = $('transcribe-status');
 const themeGrid       = $('theme-grid');
 const transcriptScroll = $('transcript-scroll');
+const showCaptionsCheckbox = $('show-captions-checkbox');
 const btnRender       = $('btn-render');
 const btnRenderLabel  = $('btn-render-label');
 const renderSpinner   = $('render-spinner');
@@ -252,13 +253,28 @@ function renderScenesList() {
   }
   container.classList.remove('hidden');
   list.innerHTML = state.scenes.map((scene, idx) => {
+    const isSlide = scene.type === 'slide';
+    const displayStr = isSlide ? `Slide: ${scene.slideText || scene.context || 'Important Point'}` : `Video: ${scene.searchQuery || 'Auto-selected'}`;
+    const color = isSlide ? '#ffb86c' : '#00ffcc';
+    const icon = isSlide ? '📝' : '🎬';
+    
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px; gap: 15px;">
-        <span style="color: rgba(255,255,255,0.8);">🎬 Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
-        <span style="font-weight: 600; color: #00ffcc; text-align: right;">"${escapeHtml(scene.searchQuery)}"</span>
+        <span style="color: rgba(255,255,255,0.8);">${icon} Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
+        <span style="font-weight: 600; color: ${color}; text-align: right;">"${escapeHtml(displayStr)}"</span>
       </div>
     `;
   }).join('');
+}
+
+/* ── Helpers ───────────────────────────────────────────── */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /* ── Render ────────────────────────────────────────────── */
@@ -275,6 +291,7 @@ btnRender.addEventListener('click', async () => {
         segments: state.segments,
         theme: state.selectedTheme,
         scenes: state.scenes,
+        showCaptions: showCaptionsCheckbox.checked,
       }),
     });
     const renderData = await renderRes.json();
@@ -384,10 +401,4 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+
