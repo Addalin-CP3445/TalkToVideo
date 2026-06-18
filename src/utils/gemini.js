@@ -169,25 +169,25 @@ async function generateScenes(segments) {
   
   const ai = getClient();
   const transcriptText = segments
-    .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s] ${s.text}`)
+    .map((s, idx) => `[Segment ${idx}] ${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s: ${s.text}`)
     .join('\n');
 
-const prompt = `You are a video director. Analyze the following audio transcript with timestamps.
+const prompt = `You are a video director. Analyze the following audio transcript with Segment IDs.
 Segment the transcript into a sequence of chronological "visual scenes" that flow naturally.
-Each scene should represent a visual theme.
+Each scene should represent a visual theme spanning one or more consecutive segments.
 Guidelines:
-1. Cover the entire duration of the audio (from 0s to the end of the last segment).
+1. Cover the entire duration of the audio (from Segment 0 to the last segment).
 2. The duration of each scene should ideally be between 8 and 25 seconds.
 3. You have TWO types of scenes you can generate: "video" and "slide".
    - Use "video" for standard B-roll footage representing the context.
    - Use "slide" when the audio discusses a formula, specific mathematical concept, an important list of bullet points, or complex definitions that the user needs to read on screen.
 4. For each scene, write:
-   - "start": the start time in seconds (number)
-   - "end": the end time in seconds (number)
+   - "startSegment": the integer ID of the first segment in this scene.
+   - "endSegment": the integer ID of the last segment in this scene.
    - "type": either "video" or "slide"
-   - "context": a short string containing the actual spoken words in this segment
+   - "context": a short string containing the actual spoken words in this scene
    - If type is "video", include: "searchQuery": a 2-4 word visual search keyword in English for a looping background video on Pexels (e.g. "technology AI brain", "nature forest").
-   - If type is "slide", include: "slideText": the text (like a formula, bullet points, or key phrase) to display on the slide. Use \n for newlines. Keep it concise.
+   - If type is "slide", include: "slideText": the text (like a formula, bullet points, or key phrase) to display on the slide. Use \\n for newlines. Keep it concise.
 
 Return ONLY a raw JSON array of scenes, no markdown code fences, no explanation.
 
@@ -196,8 +196,8 @@ ${transcriptText}
 
 Example Output:
 [
-  {"start": 0, "end": 12.5, "type": "video", "context": "Hello and welcome to this course...", "searchQuery": "technology AI brain"},
-  {"start": 12.5, "end": 30.0, "type": "slide", "context": "The formula for energy is E equals m c squared.", "slideText": "Energy-Mass Equivalence\n\nE = mc²"}
+  {"startSegment": 0, "endSegment": 4, "type": "video", "context": "Hello and welcome to this course...", "searchQuery": "technology AI brain"},
+  {"startSegment": 5, "endSegment": 8, "type": "slide", "context": "The formula for energy is E equals m c squared.", "slideText": "Energy-Mass Equivalence\\n\\nE = mc²"}
 ]`;
 
   const response = await ai.models.generateContent({
@@ -206,17 +206,30 @@ Example Output:
   });
 
   const raw = response.text;
-  let scenes;
+  let scenesRaw;
   try {
-    scenes = extractJsonArray(raw);
+    scenesRaw = extractJsonArray(raw);
   } catch (e) {
     throw new Error(`Failed to parse scene segmentation JSON: ${e.message}\nRaw snippet: ${raw.slice(0, 400)}`);
   }
 
-  if (!Array.isArray(scenes)) throw new Error('Scene segmentation is not an array');
-  return scenes.filter(
-    (s) => typeof s.start === 'number' && typeof s.end === 'number' && typeof s.type === 'string'
-  );
+  if (!Array.isArray(scenesRaw)) throw new Error('Scene segmentation is not an array');
+  
+  // Map segment indices to exact timestamps
+  return scenesRaw.map((scene) => {
+    // Safe-guard indices
+    const startIdx = Math.max(0, Math.min(scene.startSegment || 0, segments.length - 1));
+    const endIdx = Math.max(startIdx, Math.min(scene.endSegment || 0, segments.length - 1));
+    
+    return {
+      start: segments[startIdx].start,
+      end: segments[endIdx].end,
+      type: scene.type || 'video',
+      context: scene.context || '',
+      searchQuery: scene.searchQuery || '',
+      slideText: scene.slideText || ''
+    };
+  }).filter(s => typeof s.start === 'number' && typeof s.end === 'number');
 }
 
 /**

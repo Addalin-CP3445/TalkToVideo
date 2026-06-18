@@ -58,8 +58,8 @@ const os = require('os');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-/** Maximum words allowed per caption line before wrapping to the next. */
-const MAX_WORDS_PER_LINE = 7;
+/** Maximum characters allowed per caption line before wrapping to the next. */
+const MAX_CHARS_PER_LINE = 35;
 
 // textfile is much safer than text for complex string escaping. We don't need this complex escaping anymore,
 // but keep it around just in case.
@@ -68,17 +68,39 @@ function escapeFFmpeg(text) {
 }
 
 /**
- * Split a text string into lines of at most MAX_WORDS_PER_LINE words each.
+ * Split a text string into lines of at most MAX_CHARS_PER_LINE characters each,
+ * breaking at word boundaries. Also respects explicit newlines.
  * @param {string} text
+ * @param {number} maxChars
  * @returns {string[]}
  */
-function wrapText(text) {
-  const words = text.trim().split(/\s+/);
-  const lines = [];
-  for (let i = 0; i < words.length; i += MAX_WORDS_PER_LINE) {
-    lines.push(words.slice(i, i + MAX_WORDS_PER_LINE).join(' '));
+function wrapText(text, maxChars = MAX_CHARS_PER_LINE) {
+  if (!text) return [''];
+  
+  const explicitLines = text.split('\n');
+  const finalLines = [];
+  
+  for (const explicitLine of explicitLines) {
+    const words = explicitLine.trim().split(/\s+/);
+    if (words.length === 0 || words[0] === '') {
+      finalLines.push('');
+      continue;
+    }
+    
+    let currentLine = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      if (currentLine.length + 1 + word.length <= maxChars) {
+        currentLine += ' ' + word;
+      } else {
+        finalLines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    finalLines.push(currentLine);
   }
-  return lines.length > 0 ? lines : [''];
+  
+  return finalLines.length > 0 ? finalLines : [''];
 }
 
 /**
@@ -165,4 +187,4 @@ function buildCaptionFilter(segments, themeKey, width = 1920, height = 1080, tem
     .join(',');
 }
 
-module.exports = { THEMES, buildCaptionFilter };
+module.exports = { THEMES, buildCaptionFilter, wrapText };
