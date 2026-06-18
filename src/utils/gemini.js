@@ -162,7 +162,7 @@ async function transcribeAudio(fileUri, mimeType, localPath) {
  * @param {Array<{ start: number, end: number, text: string }>} segments
  * @returns {Promise<Array<{ start: number, end: number, searchQuery: string }>>}
  */
-async function generateScenes(segments) {
+async function generateScenes(segments, customPrompt = '') {
   if (!segments || segments.length === 0) {
     return [];
   }
@@ -188,7 +188,7 @@ Guidelines:
    - "context": a short string containing the actual spoken words in this scene
    - If type is "video", include: "searchQuery": a 2-4 word visual search keyword in English for a looping background video on Pexels (e.g. "technology AI brain", "nature forest").
    - If type is "slide", include: "slideText": the text (like a formula, bullet points, or key phrase) to display on the slide. Use \\n for newlines. Keep it concise.
-
+${customPrompt ? `\nUSER CUSTOM INSTRUCTIONS (PRIORITIZE THESE):\n${customPrompt}\n` : ''}
 Return ONLY a raw JSON array of scenes, no markdown code fences, no explanation.
 
 Here is the transcript:

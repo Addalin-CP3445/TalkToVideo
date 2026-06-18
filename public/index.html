@@ -47,8 +47,14 @@
         <span class="step-label">Theme</span>
       </div>
       <div class="step-connector"></div>
+
       <div class="step" id="step-indicator-4">
         <div class="step-bubble">4</div>
+        <span class="step-label">Timeline</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step" id="step-indicator-5">
+        <div class="step-bubble">5</div>
         <span class="step-label">Render</span>
       </div>
     </nav>
@@ -76,6 +82,13 @@
             <span class="file-size" id="file-size"></span>
           </div>
           <button class="btn-icon" id="remove-file" aria-label="Remove file">✕</button>
+        </div>
+
+        <div style="margin-top: 1.5rem; text-align: left;">
+          <label for="custom-prompt" style="font-weight: 500; font-size: 0.9rem; margin-bottom: 0.5rem; display: block; color: rgba(255,255,255,0.9);">
+            Custom Instructions (Optional)
+          </label>
+          <textarea id="custom-prompt" rows="2" placeholder="e.g., Focus on corporate themes, make slides minimal..." style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; font-family: inherit; font-size: 0.9rem; resize: vertical;"></textarea>
         </div>
 
         <button class="btn btn-primary" id="btn-upload" disabled>
@@ -133,14 +146,35 @@
           </label>
         </div>
 
+        <button class="btn btn-primary" id="btn-fetch-media">
+          <span class="btn-spinner hidden" id="fetch-spinner"></span>
+          <span id="btn-fetch-label">Fetch Media & Review Timeline</span>
+        </button>
+        <div class="error-box hidden" id="theme-error" role="alert"></div>
+      </section>
+
+      <!-- ── STEP 4: Timeline Fine-Tune ── -->
+      <section class="panel" id="panel-timeline">
+        <h2 class="panel-title">Fine-Tune Timeline</h2>
+        <p class="panel-subtitle">Review downloaded videos and adjust scene durations</p>
+
+        <div id="timeline-scenes-container" style="display: flex; flex-direction: column; gap: 15px; max-height: 350px; overflow-y: auto; margin-bottom: 20px; padding-right: 10px;">
+          <!-- Populated by JS -->
+        </div>
+
+        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+          <h3 style="font-size: 0.9rem; margin-bottom: 10px; color: rgba(255,255,255,0.7);">Audio Reference Track</h3>
+          <audio id="audio-player" controls style="width: 100%; height: 40px; outline: none;"></audio>
+        </div>
+
         <button class="btn btn-primary" id="btn-render">
           <span class="btn-spinner hidden" id="render-spinner"></span>
-          <span id="btn-render-label">🎬 Render Video</span>
+          <span id="btn-render-label">🎬 Compile Final Video</span>
         </button>
         <div class="error-box hidden" id="render-error" role="alert"></div>
       </section>
 
-      <!-- ── STEP 4: Rendering ── -->
+      <!-- ── STEP 5: Rendering ── -->
       <section class="panel" id="panel-render">
         <h2 class="panel-title">Rendering Video…</h2>
         <p class="panel-subtitle">FFmpeg is composing your captioned masterpiece</p>

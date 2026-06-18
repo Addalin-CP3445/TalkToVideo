@@ -9,7 +9,7 @@ const router = express.Router();
  * Response: { segments: Array<{ start, end, text }>, scenes: Array<{ start, end, searchQuery }> }
  */
 router.post('/', async (req, res) => {
-  const { fileUri, mimeType, localPath } = req.body;
+  const { fileUri, mimeType, localPath, customPrompt } = req.body;
 
   if (!mimeType) {
     return res.status(400).json({ error: '`mimeType` is required.' });
@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
 
   try {
     const segments = await transcribeAudio(fileUri, mimeType, localPath);
-    const scenes = await generateScenes(segments);
+    const scenes = await generateScenes(segments, customPrompt);
     res.json({ segments, scenes });
   } catch (err) {
     res.status(500).json({ error: err.message });

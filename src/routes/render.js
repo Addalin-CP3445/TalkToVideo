@@ -27,7 +27,7 @@ function getAudioDuration(filePath) {
 }
 
 // In-memory job store (sufficient for single-user local app)
-const jobs = {};
+const jobs = require('../utils/jobs');
 
 /**
  * POST /api/render
@@ -144,70 +144,42 @@ async function renderVideo({ localPath, segments, themeKey, outputFile, jobId, s
     // If automated multi-scene Pexels videos are to be compiled
     if (scenes && Array.isArray(scenes) && scenes.length > 0) {
       jobs[jobId].status = 'rendering';
-      jobs[jobId].progress = 5;
+      jobs[jobId].progress = 10;
 
       const downloadedScenes = [];
       const creditsList = [];
 
-      // 1. Gather scenes that need a video
-      const videoScenes = scenes.filter(s => s.type !== 'slide');
-      
-      // 2. Perform bulk validation
-      let validatedVideos = [];
-      if (videoScenes.length > 0) {
-        validatedVideos = await pexels.fetchAndValidateBatch(videoScenes);
-      }
-
-      jobs[jobId].progress = 10;
-
-      // 3. Process scenes with the validated results
-      let videoIdx = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         
         let duration = scene.end - scene.start;
         if (duration <= 0) duration = 5;
 
-        if (scene.type === 'slide') {
+        if (scene.type === 'slide' || !scene.localPath) {
           downloadedScenes.push({
             type: 'slide',
             slideText: scene.slideText || scene.context || "Important Point",
             duration: duration
           });
         } else {
-          const videoInfo = validatedVideos[videoIdx++];
-          if (videoInfo) {
-            const videoFilename = `${jobId}_scene_${i}.mp4`;
-            const videoLocalPath = path.join(__dirname, '../../uploads', videoFilename);
+          // The UI has already fetched and downloaded the video, and passed the localPath
+          tempFiles.push(scene.localPath); // Keep track for cleanup if needed (though it might be shared)
+          
+          downloadedScenes.push({
+            type: 'video',
+            localPath: scene.localPath,
+            duration: duration
+          });
 
-            // Download video
-            await pexels.downloadVideo(videoInfo.downloadUrl, videoLocalPath);
-            tempFiles.push(videoLocalPath);
-            
-            downloadedScenes.push({
-              type: 'video',
-              localPath: videoLocalPath,
-              duration: duration
-            });
-
+          if (scene.videoInfo) {
             creditsList.push(`Scene ${i + 1} (${scene.start.toFixed(1)}s - ${scene.end.toFixed(1)}s):
 - Visual Query: "${scene.searchQuery}"
-- Video Author: ${videoInfo.author}
-- Author Profile: ${videoInfo.authorUrl}
-- Direct Video Link: ${videoInfo.downloadUrl}
+- Video Author: ${scene.videoInfo.author}
+- Author Profile: ${scene.videoInfo.authorUrl}
+- Direct Video Link: ${scene.videoInfo.downloadUrl}
 `);
-          } else {
-            // Fallback to slide if video verification failed or no key
-            downloadedScenes.push({
-              type: 'slide',
-              slideText: scene.context || scene.searchQuery || "Information",
-              duration: duration
-            });
           }
         }
-
-        const downloadProgress = Math.round(10 + ((i + 1) / scenes.length) * 15);
-        jobs[jobId].progress = downloadProgress;
       }
 
       // Write credits text file
