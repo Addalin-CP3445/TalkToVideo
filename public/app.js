@@ -145,6 +145,47 @@ btnDebug.addEventListener('click', async () => {
   }
 });
 
+const btnDebugEditor = $('btn-debug-editor');
+if (btnDebugEditor) {
+  btnDebugEditor.addEventListener('click', async () => {
+    hideError(uploadError);
+    btnDebugEditor.textContent = 'Loading…';
+    btnDebugEditor.disabled = true;
+
+    try {
+      const res = await fetch('/api/debug/mock');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Debug endpoint failed');
+
+      state.localPath = data.localPath;
+      state.segments = data.segments;
+      state.scenes = data.scenes.map(s => ({
+        ...s,
+        type: 'slide',
+        slideText: `Debug Slide: ${s.searchQuery}`
+      }));
+
+      // Set file data for local playback
+      state.file = new File([new ArrayBuffer(1)], 'mock.mp3', { type: 'audio/mpeg' }); 
+      // The backend actually gives a real path for rendering, but frontend needs a blob for audioPlayer
+      // To properly play it, we can fetch it, but that's slow. We'll just let audioPlayer fail or use the mock blob
+      // Wait, let's just fetch it as a blob!
+      const audioRes = await fetch(`/uploads/_debug_silence.mp3`);
+      if (audioRes.ok) {
+        state.file = await audioRes.blob();
+      }
+
+      renderTimeline();
+      showPanel('timeline');
+    } catch (err) {
+      showError(uploadError, '🧪 Editor Debug error: ' + err.message);
+    } finally {
+      btnDebugEditor.textContent = '⏭ Direct to Editor (Fast)';
+      btnDebugEditor.disabled = false;
+    }
+  });
+}
+
 /* ── Upload & transcribe ───────────────────────────────── */
 btnUpload.addEventListener('click', async () => {
   if (!state.file) return;
