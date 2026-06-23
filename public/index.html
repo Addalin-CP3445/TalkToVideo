@@ -164,13 +164,19 @@
         <p class="panel-subtitle">Review downloaded videos and adjust scene durations</p>
 
         <div class="timeline-editor" id="timeline-editor">
-          <div class="timeline-ruler" id="timeline-ruler">
-            <div class="timeline-playhead" id="timeline-playhead">
-              <div class="playhead-head"></div>
-              <div class="playhead-line"></div>
-            </div>
-          </div>
           <div class="timeline-tracks" id="timeline-tracks">
+            
+            <!-- Ruler Track -->
+            <div class="timeline-track" style="height: 30px; border-bottom: 1px solid var(--clr-border);">
+              <div class="track-header" style="height: 30px;"></div>
+              <div class="track-content" id="timeline-ruler" style="background: var(--clr-surface-2); min-width: 800px;">
+                <div class="timeline-playhead" id="timeline-playhead">
+                  <div class="playhead-head"></div>
+                  <div class="playhead-line"></div>
+                </div>
+              </div>
+            </div>
+
             <div class="timeline-track">
               <div class="track-header">
                 <span class="track-icon">🎬</span>

@@ -216,13 +216,19 @@ Example Output:
   if (!Array.isArray(scenesRaw)) throw new Error('Scene segmentation is not an array');
   
   // Map segment indices to exact timestamps
-  return scenesRaw.map((scene) => {
+  return scenesRaw.map((scene, idx) => {
     // Safe-guard indices
     const startIdx = Math.max(0, Math.min(scene.startSegment || 0, segments.length - 1));
     const endIdx = Math.max(startIdx, Math.min(scene.endSegment || 0, segments.length - 1));
     
+    let startTime = segments[startIdx].start;
+    // Force the first scene to start at 0s to cover initial silence
+    if (idx === 0) {
+      startTime = 0;
+    }
+    
     return {
-      start: segments[startIdx].start,
+      start: startTime,
       end: segments[endIdx].end,
       type: scene.type || 'video',
       context: scene.context || '',

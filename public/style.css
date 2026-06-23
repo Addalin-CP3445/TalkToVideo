@@ -85,6 +85,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-shell.wide {
+  max-width: 1200px;
 }
 
 /* ── Header ────────────────────────────────────────────── */
@@ -691,13 +696,7 @@ body {
   user-select: none;
 }
 
-.timeline-ruler {
-  height: 30px;
-  background: var(--clr-surface-2);
-  border-bottom: 1px solid var(--clr-border);
-  position: relative;
-  overflow: hidden;
-}
+
 
 .timeline-playhead {
   position: absolute;

@@ -46,6 +46,11 @@ const debugSpinner    = $('debug-spinner');
 const PANELS = ['upload', 'transcribe', 'theme', 'timeline', 'render'];
 
 function showPanel(name) {
+  const appShell = document.querySelector('.app-shell');
+  if (appShell) {
+    appShell.classList.toggle('wide', name === 'timeline');
+  }
+
   PANELS.forEach((p, idx) => {
     const panel = $(`panel-${p}`);
     const indicator = $(`step-indicator-${idx + 1}`);
@@ -413,6 +418,11 @@ function renderTimeline() {
   const trackAudio = $('track-audio');
   const ruler = $('timeline-ruler');
   
+  // Guarantee the first scene always anchors to 0s to cover initial silence
+  if (state.scenes && state.scenes.length > 0) {
+    state.scenes[0].start = 0;
+  }
+
   if (state.file && audioPlayer) {
     if (!audioPlayer.src) {
       audioPlayer.src = URL.createObjectURL(state.file);
