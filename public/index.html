@@ -158,13 +158,39 @@
         <h2 class="panel-title">Fine-Tune Timeline</h2>
         <p class="panel-subtitle">Review downloaded videos and adjust scene durations</p>
 
-        <div id="timeline-scenes-container" style="display: flex; flex-direction: column; gap: 15px; max-height: 350px; overflow-y: auto; margin-bottom: 20px; padding-right: 10px;">
-          <!-- Populated by JS -->
+        <div class="timeline-editor" id="timeline-editor">
+          <div class="timeline-ruler" id="timeline-ruler">
+            <div class="timeline-playhead" id="timeline-playhead">
+              <div class="playhead-head"></div>
+              <div class="playhead-line"></div>
+            </div>
+          </div>
+          <div class="timeline-tracks" id="timeline-tracks">
+            <div class="timeline-track">
+              <div class="track-header">
+                <span class="track-icon">🎬</span>
+                <span class="track-name">V1</span>
+              </div>
+              <div class="track-content" id="track-video">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+            <div class="timeline-track">
+              <div class="track-header">
+                <span class="track-icon">🔊</span>
+                <span class="track-name">A1</span>
+              </div>
+              <div class="track-content" id="track-audio">
+                <div class="audio-clip-visual" id="audio-clip-visual">
+                   <div class="waveform-fake"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
-          <h3 style="font-size: 0.9rem; margin-bottom: 10px; color: rgba(255,255,255,0.7);">Audio Reference Track</h3>
-          <audio id="audio-player" controls style="width: 100%; height: 40px; outline: none;"></audio>
+        <div style="margin-top: 15px; text-align: center; margin-bottom: 20px;">
+          <audio id="audio-player" controls style="width: 100%; height: 40px; outline: none; border-radius: 8px; background: rgba(0,0,0,0.3);"></audio>
         </div>
 
         <button class="btn btn-primary" id="btn-render">

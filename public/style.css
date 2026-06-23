@@ -678,6 +678,189 @@ body {
 /* ── Utilities ─────────────────────────────────────────── */
 .hidden { display: none !important; }
 
+/* ── Timeline Editor ─────────────────────────────────────── */
+.timeline-editor {
+  width: 100%;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  user-select: none;
+}
+
+.timeline-ruler {
+  height: 30px;
+  background: var(--clr-surface-2);
+  border-bottom: 1px solid var(--clr-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--clr-error);
+  z-index: 10;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.playhead-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--clr-error);
+  pointer-events: auto;
+  cursor: ew-resize;
+}
+
+.playhead-line {
+  position: absolute;
+  top: 8px;
+  bottom: -500px; /* Extend down through tracks */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: var(--clr-error);
+}
+
+.timeline-tracks {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 5px;
+}
+
+.timeline-track {
+  display: flex;
+  height: 70px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.track-header {
+  width: 80px;
+  flex-shrink: 0;
+  background: var(--clr-surface-2);
+  border-right: 1px solid var(--clr-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--clr-muted);
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.track-content {
+  flex-grow: 1;
+  position: relative;
+  min-width: 800px; /* Base width, will be updated by JS */
+  background: repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(255,255,255,0.02) 49px, rgba(255,255,255,0.02) 50px);
+}
+
+.timeline-clip {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: grab;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.timeline-clip:active {
+  cursor: grabbing;
+}
+
+.timeline-clip.video-clip {
+  background: rgba(0, 255, 204, 0.15);
+  border-color: #00ffcc;
+  color: #00ffcc;
+}
+
+.timeline-clip.slide-clip {
+  background: rgba(255, 184, 108, 0.15);
+  border-color: #ffb86c;
+  color: #ffb86c;
+}
+
+.clip-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: rgba(255,255,255,0.1);
+  cursor: ew-resize;
+  z-index: 2;
+}
+.clip-handle:hover {
+  background: rgba(255,255,255,0.3);
+}
+.clip-handle-left { left: 0; }
+.clip-handle-right { right: 0; }
+
+.clip-content {
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 10px;
+}
+
+.clip-thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.audio-clip-visual {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  background: rgba(54, 214, 160, 0.15);
+  border: 1px solid #36d6a0;
+  border-radius: 4px;
+  color: #36d6a0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.waveform-fake {
+  width: 100%;
+  height: 50%;
+  background-image: repeating-linear-gradient(90deg, #36d6a0 0px, #36d6a0 2px, transparent 2px, transparent 4px);
+  opacity: 0.5;
+}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 500px) {
   .card { padding: 1.75rem 1.25rem; }

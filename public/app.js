@@ -364,62 +364,184 @@ function listenFetchProgress(jobId) {
 }
 
 const audioPlayer = $('audio-player');
-const timelineScenesContainer = $('timeline-scenes-container');
+let timelineDuration = 60;
+const pixelsPerSecond = 40; // Timeline scale
 
 function renderTimeline() {
-  if (state.file && audioPlayer) {
-    audioPlayer.src = URL.createObjectURL(state.file);
-  }
+  const trackVideo = $('track-video');
+  const trackAudio = $('track-audio');
+  const ruler = $('timeline-ruler');
   
-  if (!timelineScenesContainer) return;
-
-  timelineScenesContainer.innerHTML = state.scenes.map((scene, idx) => {
-    const isSlide = scene.type === 'slide';
-    const bg = isSlide ? '#ffb86c22' : '#00ffcc22';
-    const border = isSlide ? '#ffb86c' : '#00ffcc';
-    
-    let mediaPreview = '';
-    if (isSlide) {
-      mediaPreview = `<div style="height: 60px; width: 100px; background: #222; border: 1px solid #444; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; text-align: center; overflow: hidden; padding: 2px;">Slide Text</div>`;
-    } else {
-      mediaPreview = `<video src="${scene.previewUrl}" style="height: 60px; width: 100px; object-fit: cover; border-radius: 4px; background: #000;" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>`;
+  if (state.file && audioPlayer) {
+    if (!audioPlayer.src) {
+      audioPlayer.src = URL.createObjectURL(state.file);
+      audioPlayer.onloadedmetadata = () => {
+        timelineDuration = Math.max(audioPlayer.duration || 60, state.scenes.length ? state.scenes[state.scenes.length-1].end : 0) + 10;
+        updateTimelineWidth();
+      };
     }
+  }
+
+  if (!trackVideo) return;
+  timelineDuration = Math.max(
+    state.scenes.length ? state.scenes[state.scenes.length-1].end : 60,
+    audioPlayer.duration || 60
+  ) + 10; // add 10s buffer
+
+  updateTimelineWidth();
+
+  trackVideo.innerHTML = state.scenes.map((scene, idx) => {
+    const isSlide = scene.type === 'slide';
+    const left = scene.start * pixelsPerSecond;
+    const width = (scene.end - scene.start) * pixelsPerSecond;
+    const cls = isSlide ? 'slide-clip' : 'video-clip';
+    const label = isSlide ? 'Slide' : 'Video';
+    const bg = isSlide ? '' : `<img src="${scene.previewUrl}" class="clip-thumbnail">`;
     
     return `
-      <div style="background: ${bg}; border-left: 4px solid ${border}; padding: 10px; border-radius: 6px; display: flex; gap: 15px; align-items: center;">
-        ${mediaPreview}
-        <div style="flex-grow: 1;">
-          <h4 style="margin: 0 0 5px 0; font-size: 0.9rem;">Scene ${idx + 1} - ${isSlide ? 'Slide' : 'Video'}</h4>
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <label style="font-size: 0.8rem;">Start (s): <input type="number" step="0.1" value="${scene.start.toFixed(1)}" class="timeline-input-start" data-idx="${idx}" style="width: 60px; background: #111; color: white; border: 1px solid #333; padding: 2px 4px; border-radius: 4px;"></label>
-            <label style="font-size: 0.8rem;">End (s): <input type="number" step="0.1" value="${scene.end.toFixed(1)}" class="timeline-input-end" data-idx="${idx}" style="width: 60px; background: #111; color: white; border: 1px solid #333; padding: 2px 4px; border-radius: 4px;"></label>
-            <button class="btn btn-ghost timeline-jump" data-start="${scene.start}" style="padding: 2px 8px; font-size: 0.75rem;">▶ Jump</button>
-          </div>
-        </div>
+      <div class="timeline-clip ${cls}" id="clip-${idx}" data-idx="${idx}" style="left: ${left}px; width: ${width}px;">
+        ${bg}
+        <div class="clip-handle clip-handle-left" data-action="resize-left"></div>
+        <div class="clip-content">${label} ${idx + 1}</div>
+        <div class="clip-handle clip-handle-right" data-action="resize-right"></div>
       </div>
     `;
   }).join('');
 
-  // Bind inputs
-  timelineScenesContainer.querySelectorAll('.timeline-input-start').forEach(inp => {
-    inp.addEventListener('change', (e) => {
-      const idx = e.target.getAttribute('data-idx');
-      state.scenes[idx].start = parseFloat(e.target.value);
-    });
-  });
-  timelineScenesContainer.querySelectorAll('.timeline-input-end').forEach(inp => {
-    inp.addEventListener('change', (e) => {
-      const idx = e.target.getAttribute('data-idx');
-      state.scenes[idx].end = parseFloat(e.target.value);
-    });
-  });
-  timelineScenesContainer.querySelectorAll('.timeline-jump').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const start = parseFloat(e.target.getAttribute('data-start'));
-      audioPlayer.currentTime = start;
-      audioPlayer.play();
-    });
-  });
+  initTimelineInteractions();
+}
+
+function updateTimelineWidth() {
+  const totalWidth = timelineDuration * pixelsPerSecond;
+  const trackVideo = $('track-video');
+  const trackAudio = $('track-audio');
+  const ruler = $('timeline-ruler');
+  
+  if (trackVideo) trackVideo.style.minWidth = `${totalWidth}px`;
+  if (trackAudio) trackAudio.style.minWidth = `${totalWidth}px`;
+  if (ruler) {
+    ruler.style.minWidth = `${totalWidth}px`;
+    // Draw ruler markings
+    let markings = '<div class="timeline-playhead" id="timeline-playhead"><div class="playhead-head"></div><div class="playhead-line"></div></div>';
+    for (let i = 0; i < timelineDuration; i += 5) {
+      markings += `<div style="position: absolute; left: ${i * pixelsPerSecond}px; bottom: 0; height: 10px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 4px; font-size: 10px; color: rgba(255,255,255,0.4); pointer-events: none;">${i}s</div>`;
+    }
+    ruler.innerHTML = markings;
+    initPlayhead();
+  }
+}
+
+function initTimelineInteractions() {
+  const trackVideo = $('track-video');
+  let activeDrag = null;
+  let startX = 0;
+  let startLeft = 0;
+  let startWidth = 0;
+  
+  trackVideo.onmousedown = (e) => {
+    const clip = e.target.closest('.timeline-clip');
+    if (!clip) return;
+    
+    const idx = clip.getAttribute('data-idx');
+    const isLeftHandle = e.target.classList.contains('clip-handle-left');
+    const isRightHandle = e.target.classList.contains('clip-handle-right');
+    
+    activeDrag = {
+      clip, idx,
+      type: isLeftHandle ? 'resize-left' : (isRightHandle ? 'resize-right' : 'move')
+    };
+    
+    startX = e.clientX;
+    startLeft = parseFloat(clip.style.left);
+    startWidth = parseFloat(clip.style.width);
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+  
+  function onMouseMove(e) {
+    if (!activeDrag) return;
+    
+    const dx = e.clientX - startX;
+    const scene = state.scenes[activeDrag.idx];
+    
+    if (activeDrag.type === 'move') {
+      let newLeft = startLeft + dx;
+      if (newLeft < 0) newLeft = 0;
+      activeDrag.clip.style.left = `${newLeft}px`;
+      scene.start = newLeft / pixelsPerSecond;
+      scene.end = scene.start + (startWidth / pixelsPerSecond);
+    } else if (activeDrag.type === 'resize-right') {
+      let newWidth = startWidth + dx;
+      if (newWidth < pixelsPerSecond) newWidth = pixelsPerSecond; // min 1s
+      activeDrag.clip.style.width = `${newWidth}px`;
+      scene.end = scene.start + (newWidth / pixelsPerSecond);
+    } else if (activeDrag.type === 'resize-left') {
+      let newLeft = startLeft + dx;
+      let newWidth = startWidth - dx;
+      if (newLeft < 0) { newWidth += newLeft; newLeft = 0; }
+      if (newWidth < pixelsPerSecond) { newLeft = startLeft + startWidth - pixelsPerSecond; newWidth = pixelsPerSecond; }
+      activeDrag.clip.style.left = `${newLeft}px`;
+      activeDrag.clip.style.width = `${newWidth}px`;
+      scene.start = newLeft / pixelsPerSecond;
+      scene.end = scene.start + (newWidth / pixelsPerSecond);
+    }
+  }
+  
+  function onMouseUp() {
+    activeDrag = null;
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+}
+
+function initPlayhead() {
+  const playhead = $('timeline-playhead');
+  const ruler = $('timeline-ruler');
+  if (!playhead || !audioPlayer) return;
+  
+  audioPlayer.ontimeupdate = () => {
+    const left = audioPlayer.currentTime * pixelsPerSecond;
+    playhead.style.left = `${left}px`;
+  };
+  
+  ruler.onmousedown = (e) => {
+    if (e.target.closest('.playhead-head')) return;
+    const rect = ruler.getBoundingClientRect();
+    const x = e.clientX - rect.left + ruler.parentElement.scrollLeft;
+    const time = x / pixelsPerSecond;
+    if (time <= audioPlayer.duration || isNaN(audioPlayer.duration)) {
+      audioPlayer.currentTime = time;
+    }
+  };
+  
+  const head = playhead.querySelector('.playhead-head');
+  let isDraggingPlayhead = false;
+  
+  if (head) {
+    head.onmousedown = (e) => {
+      isDraggingPlayhead = true;
+      document.addEventListener('mousemove', playheadMove);
+      document.addEventListener('mouseup', playheadUp);
+    };
+  }
+  
+  function playheadMove(e) {
+    if (!isDraggingPlayhead) return;
+    const rect = ruler.getBoundingClientRect();
+    let x = e.clientX - rect.left + ruler.parentElement.scrollLeft;
+    if (x < 0) x = 0;
+    const time = x / pixelsPerSecond;
+    if (time <= audioPlayer.duration || isNaN(audioPlayer.duration)) {
+      audioPlayer.currentTime = time;
+    }
+  }
+  
+  function playheadUp() {
+    isDraggingPlayhead = false;
+    document.removeEventListener('mousemove', playheadMove);
+    document.removeEventListener('mouseup', playheadUp);
+  }
 }
 
 /* ── Render ────────────────────────────────────────────── */
