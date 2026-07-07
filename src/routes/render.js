@@ -159,7 +159,9 @@ async function renderVideo({ localPath, segments, themeKey, outputFile, jobId, s
           downloadedScenes.push({
             type: 'slide',
             slideText: scene.slideText || scene.context || "Important Point",
-            duration: duration
+            duration: duration,
+            start: scene.start,
+            end: scene.end
           });
         } else {
           // The UI has already fetched and downloaded the video, and passed the localPath
@@ -168,7 +170,9 @@ async function renderVideo({ localPath, segments, themeKey, outputFile, jobId, s
           downloadedScenes.push({
             type: 'video',
             localPath: scene.localPath,
-            duration: duration
+            duration: duration,
+            start: scene.start,
+            end: scene.end
           });
 
           if (scene.videoInfo) {

@@ -413,7 +413,117 @@ const audioPlayer = $('audio-player');
 let timelineDuration = 60;
 const pixelsPerSecond = 40; // Timeline scale
 
-function renderTimeline() {
+/**
+ * Generates a thumbnail data URL from a video Blob/File/URL by
+ * seeking a hidden <video> element to 0.5 s and painting it on a canvas.
+ * @param {string} src  – object URL or server URL for the video
+ * @returns {Promise<string>} data URL (JPEG)
+ */
+function generateVideoThumbnail(src) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = src;
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+
+    const cleanup = () => {
+      video.src = '';
+      video.load();
+    };
+
+    video.onloadedmetadata = () => {
+      // Seek to 0.5 s (or the midpoint for very short clips)
+      video.currentTime = Math.min(0.5, video.duration / 2);
+    };
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      } catch (e) {
+        reject(e);
+      } finally {
+        cleanup();
+      }
+    };
+
+    video.onerror = (e) => { cleanup(); reject(e); };
+
+    // Some browsers need a call to load() after setting src
+    video.load();
+  });
+}
+
+/**
+ * Draws a real audio waveform onto a <canvas> element using Web Audio API.
+ * @param {Blob|File} audioFile
+ * @param {HTMLCanvasElement} canvas
+ */
+async function drawAudioWaveform(audioFile, canvas) {
+  try {
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+
+    const channelData = audioBuffer.getChannelData(0); // mono / left
+    const W = canvas.width;
+    const H = canvas.height;
+    const ctx = canvas.getContext('2d');
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = 'rgba(54,214,160,0.08)';
+    ctx.fillRect(0, 0, W, H);
+
+    const samplesPerPixel = Math.floor(channelData.length / W);
+    const midY = H / 2;
+
+    // Gradient stroke
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0,   'rgba(54,214,160,0.9)');
+    grad.addColorStop(0.5, 'rgba(62,207,207,0.9)');
+    grad.addColorStop(1,   'rgba(54,214,160,0.9)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1;
+
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      const start = x * samplesPerPixel;
+      let min = 0, max = 0;
+      for (let j = 0; j < samplesPerPixel; j++) {
+        const s = channelData[start + j] || 0;
+        if (s < min) min = s;
+        if (s > max) max = s;
+      }
+      const yTop    = midY - max * midY * 0.95;
+      const yBottom = midY - min * midY * 0.95;
+      ctx.moveTo(x + 0.5, yTop);
+      ctx.lineTo(x + 0.5, yBottom);
+    }
+    ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = 'rgba(54,214,160,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(W, midY);
+    ctx.stroke();
+
+  } catch (e) {
+    console.warn('[waveform] Could not decode audio for waveform:', e.message);
+  }
+}
+
+async function renderTimeline() {
   const trackVideo = $('track-video');
   const trackAudio = $('track-audio');
   const ruler = $('timeline-ruler');
@@ -425,10 +535,13 @@ function renderTimeline() {
 
   if (state.file && audioPlayer) {
     if (!audioPlayer.src) {
+      const audioBlob = state.file instanceof Blob ? state.file : null;
       audioPlayer.src = URL.createObjectURL(state.file);
       audioPlayer.onloadedmetadata = () => {
         timelineDuration = Math.max(audioPlayer.duration || 60, state.scenes.length ? state.scenes[state.scenes.length-1].end : 0) + 10;
         updateTimelineWidth();
+        // Draw real waveform once we know the total duration
+        if (audioBlob) scheduleWaveform(audioBlob);
       };
     }
   }
@@ -441,25 +554,67 @@ function renderTimeline() {
 
   updateTimelineWidth();
 
+  // Build clips — video clips get a placeholder first, then async thumbnail
   trackVideo.innerHTML = state.scenes.map((scene, idx) => {
     const isSlide = scene.type === 'slide';
     const left = scene.start * pixelsPerSecond;
     const width = (scene.end - scene.start) * pixelsPerSecond;
     const cls = isSlide ? 'slide-clip' : 'video-clip';
-    const label = isSlide ? 'Slide' : 'Video';
-    const bg = isSlide ? '' : `<img src="${scene.previewUrl}" class="clip-thumbnail">`;
-    
+    const label = isSlide
+      ? `<span class="clip-slide-label">${escapeHtml(scene.slideText || 'Slide')}</span>`
+      : `<span class="clip-video-label">🎬 Video ${idx + 1}</span>`;
+
+    // Thumbnail placeholder for video clips (filled in async below)
+    const thumbEl = isSlide
+      ? ''
+      : `<img class="clip-thumbnail" id="thumb-${idx}" src="" alt="" style="opacity:0;">`;
+
     return `
       <div class="timeline-clip ${cls}" id="clip-${idx}" data-idx="${idx}" style="left: ${left}px; width: ${width}px;">
-        ${bg}
+        ${thumbEl}
         <div class="clip-handle clip-handle-left" data-action="resize-left"></div>
-        <div class="clip-content">${label} ${idx + 1}</div>
+        <div class="clip-content">${label}</div>
         <div class="clip-handle clip-handle-right" data-action="resize-right"></div>
       </div>
     `;
   }).join('');
 
   initTimelineInteractions();
+
+  // Async: generate real thumbnails for video clips
+  state.scenes.forEach((scene, idx) => {
+    if (scene.type === 'slide' || !scene.previewUrl) return;
+    const imgEl = $(`thumb-${idx}`);
+    if (!imgEl) return;
+    generateVideoThumbnail(scene.previewUrl)
+      .then(dataUrl => {
+        imgEl.src = dataUrl;
+        imgEl.style.opacity = '0.5';
+      })
+      .catch(() => {
+        // Thumbnail failed — just leave it hidden
+      });
+  });
+
+  // Draw waveform if audio is already loaded
+  if (state.file instanceof Blob && audioPlayer.readyState >= 1) {
+    scheduleWaveform(state.file);
+  }
+}
+
+/**
+ * Schedules waveform drawing after the timeline width is known.
+ * Uses a small timeout so the canvas has been sized by updateTimelineWidth first.
+ */
+function scheduleWaveform(audioBlob) {
+  setTimeout(() => {
+    const canvas = $('waveform-canvas');
+    if (!canvas) return;
+    const totalWidth = timelineDuration * pixelsPerSecond;
+    canvas.width  = totalWidth;
+    canvas.height = 60;
+    drawAudioWaveform(audioBlob, canvas);
+  }, 100);
 }
 
 function updateTimelineWidth() {
@@ -467,9 +622,12 @@ function updateTimelineWidth() {
   const trackVideo = $('track-video');
   const trackAudio = $('track-audio');
   const ruler = $('timeline-ruler');
+  const audioVisual = $('audio-clip-visual');
   
   if (trackVideo) trackVideo.style.minWidth = `${totalWidth}px`;
   if (trackAudio) trackAudio.style.minWidth = `${totalWidth}px`;
+  // Make the audio clip span the full timeline width
+  if (audioVisual) { audioVisual.style.width = `${totalWidth}px`; audioVisual.style.right = 'auto'; }
   if (ruler) {
     ruler.style.minWidth = `${totalWidth}px`;
     // Draw ruler markings
