@@ -43,9 +43,14 @@ const btnDebugLabel   = $('btn-debug-label');
 const debugSpinner    = $('debug-spinner');
 
 /* ── Step management ───────────────────────────────────── */
-const PANELS = ['upload', 'transcribe', 'theme', 'render'];
+const PANELS = ['upload', 'transcribe', 'theme', 'timeline', 'render'];
 
 function showPanel(name) {
+  const appShell = document.querySelector('.app-shell');
+  if (appShell) {
+    appShell.classList.toggle('wide', name === 'timeline');
+  }
+
   PANELS.forEach((p, idx) => {
     const panel = $(`panel-${p}`);
     const indicator = $(`step-indicator-${idx + 1}`);
@@ -145,6 +150,47 @@ btnDebug.addEventListener('click', async () => {
   }
 });
 
+const btnDebugEditor = $('btn-debug-editor');
+if (btnDebugEditor) {
+  btnDebugEditor.addEventListener('click', async () => {
+    hideError(uploadError);
+    btnDebugEditor.textContent = 'Loading…';
+    btnDebugEditor.disabled = true;
+
+    try {
+      const res = await fetch('/api/debug/mock');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Debug endpoint failed');
+
+      state.localPath = data.localPath;
+      state.segments = data.segments;
+      state.scenes = data.scenes.map(s => ({
+        ...s,
+        type: 'slide',
+        slideText: `Debug Slide: ${s.searchQuery}`
+      }));
+
+      // Set file data for local playback
+      state.file = new File([new ArrayBuffer(1)], 'mock.mp3', { type: 'audio/mpeg' }); 
+      // The backend actually gives a real path for rendering, but frontend needs a blob for audioPlayer
+      // To properly play it, we can fetch it, but that's slow. We'll just let audioPlayer fail or use the mock blob
+      // Wait, let's just fetch it as a blob!
+      const audioRes = await fetch(`/uploads/_debug_silence.mp3`);
+      if (audioRes.ok) {
+        state.file = await audioRes.blob();
+      }
+
+      renderTimeline();
+      showPanel('timeline');
+    } catch (err) {
+      showError(uploadError, '🧪 Editor Debug error: ' + err.message);
+    } finally {
+      btnDebugEditor.textContent = '⏭ Direct to Editor (Fast)';
+      btnDebugEditor.disabled = false;
+    }
+  });
+}
+
 /* ── Upload & transcribe ───────────────────────────────── */
 btnUpload.addEventListener('click', async () => {
   if (!state.file) return;
@@ -174,7 +220,12 @@ btnUpload.addEventListener('click', async () => {
     const transcribeRes = await fetch('/api/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileUri: state.fileUri, mimeType: state.mimeType, localPath: state.localPath }),
+      body: JSON.stringify({ 
+        fileUri: state.fileUri, 
+        mimeType: state.mimeType, 
+        localPath: state.localPath,
+        customPrompt: $('custom-prompt') ? $('custom-prompt').value.trim() : ''
+      }),
     });
     const transcribeData = await transcribeRes.json();
     if (!transcribeRes.ok) throw new Error(transcribeData.error || 'Transcription failed');
@@ -254,17 +305,38 @@ function renderScenesList() {
   container.classList.remove('hidden');
   list.innerHTML = state.scenes.map((scene, idx) => {
     const isSlide = scene.type === 'slide';
-    const displayStr = isSlide ? `Slide: ${scene.slideText || scene.context || 'Important Point'}` : `Video: ${scene.searchQuery || 'Auto-selected'}`;
     const color = isSlide ? '#ffb86c' : '#00ffcc';
     const icon = isSlide ? '📝' : '🎬';
     
-    return `
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 4px; gap: 15px;">
-        <span style="color: rgba(255,255,255,0.8);">${icon} Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
-        <span style="font-weight: 600; color: ${color}; text-align: right;">"${escapeHtml(displayStr)}"</span>
-      </div>
-    `;
+    if (isSlide) {
+      const currentText = scene.slideText || scene.context || 'Important Point';
+      return `
+        <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 8px; gap: 5px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: rgba(255,255,255,0.8);">${icon} Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
+            <span style="font-weight: 600; color: ${color};">Slide Text</span>
+          </div>
+          <textarea class="slide-text-edit" data-idx="${idx}" rows="2" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; font-family: inherit; font-size: 0.85rem; resize: vertical;">${escapeHtml(currentText)}</textarea>
+        </div>
+      `;
+    } else {
+      const displayStr = `Video: ${scene.searchQuery || 'Auto-selected'}`;
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 8px; gap: 15px;">
+          <span style="color: rgba(255,255,255,0.8);">${icon} Scene ${idx + 1} (${formatTime(scene.start)} - ${formatTime(scene.end)})</span>
+          <span style="font-weight: 600; color: ${color}; text-align: right;">"${escapeHtml(displayStr)}"</span>
+        </div>
+      `;
+    }
   }).join('');
+
+  // Bind event listeners for textareas
+  list.querySelectorAll('.slide-text-edit').forEach(ta => {
+    ta.addEventListener('input', (e) => {
+      const idx = e.target.getAttribute('data-idx');
+      state.scenes[idx].slideText = e.target.value;
+    });
+  });
 }
 
 /* ── Helpers ───────────────────────────────────────────── */
@@ -277,36 +349,443 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-/* ── Render ────────────────────────────────────────────── */
-btnRender.addEventListener('click', async () => {
-  setLoading(btnRender, renderSpinner, btnRenderLabel, true, 'Starting…');
-  hideError(renderError);
+/* ── Fetch Media & Timeline ────────────────────────────── */
+const btnFetchMedia = $('btn-fetch-media');
+const fetchSpinner = $('fetch-spinner');
+const btnFetchLabel = $('btn-fetch-label');
+const themeError = $('theme-error');
 
+if (btnFetchMedia) {
+  btnFetchMedia.addEventListener('click', async () => {
+    setLoading(btnFetchMedia, fetchSpinner, btnFetchLabel, true, 'Fetching Videos…');
+    hideError(themeError);
+
+    try {
+      const res = await fetch('/api/fetch-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenes: state.scenes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Fetch request failed');
+
+      listenFetchProgress(data.jobId);
+    } catch (err) {
+      showError(themeError, err.message);
+      setLoading(btnFetchMedia, fetchSpinner, btnFetchLabel, false, 'Fetch Media & Review Timeline');
+    }
+  });
+}
+
+function listenFetchProgress(jobId) {
+  const source = new EventSource(`/api/fetch-media/progress/${jobId}`);
+
+  source.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    if (data.status === 'fetching') {
+      btnFetchLabel.textContent = `Fetching Videos… ${data.progress}%`;
+    }
+
+    if (data.status === 'done') {
+      source.close();
+      state.scenes = data.scenes;
+      setLoading(btnFetchMedia, fetchSpinner, btnFetchLabel, false, 'Fetch Media & Review Timeline');
+      renderTimeline();
+      showPanel('timeline');
+    }
+
+    if (data.status === 'error') {
+      source.close();
+      setLoading(btnFetchMedia, fetchSpinner, btnFetchLabel, false, 'Fetch Media & Review Timeline');
+      showError(themeError, `Fetch failed: ${data.error}`);
+    }
+  };
+
+  source.onerror = () => {
+    source.close();
+    setLoading(btnFetchMedia, fetchSpinner, btnFetchLabel, false, 'Fetch Media & Review Timeline');
+    showError(themeError, 'Lost connection to server during fetch.');
+  };
+}
+
+const audioPlayer = $('audio-player');
+let timelineDuration = 60;
+const pixelsPerSecond = 40; // Timeline scale
+
+/**
+ * Generates a thumbnail data URL from a video Blob/File/URL by
+ * seeking a hidden <video> element to 0.5 s and painting it on a canvas.
+ * @param {string} src  – object URL or server URL for the video
+ * @returns {Promise<string>} data URL (JPEG)
+ */
+function generateVideoThumbnail(src) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.src = src;
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+
+    const cleanup = () => {
+      video.src = '';
+      video.load();
+    };
+
+    video.onloadedmetadata = () => {
+      // Seek to 0.5 s (or the midpoint for very short clips)
+      video.currentTime = Math.min(0.5, video.duration / 2);
+    };
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = 320;
+        canvas.height = 180;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      } catch (e) {
+        reject(e);
+      } finally {
+        cleanup();
+      }
+    };
+
+    video.onerror = (e) => { cleanup(); reject(e); };
+
+    // Some browsers need a call to load() after setting src
+    video.load();
+  });
+}
+
+/**
+ * Draws a real audio waveform onto a <canvas> element using Web Audio API.
+ * @param {Blob|File} audioFile
+ * @param {HTMLCanvasElement} canvas
+ */
+async function drawAudioWaveform(audioFile, canvas) {
   try {
-    const renderRes = await fetch('/api/render', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        localPath: state.localPath,
-        segments: state.segments,
-        theme: state.selectedTheme,
-        scenes: state.scenes,
-        showCaptions: showCaptionsCheckbox.checked,
-      }),
-    });
-    const renderData = await renderRes.json();
-    if (!renderRes.ok) throw new Error(renderData.error || 'Render request failed');
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
 
-    state.jobId = renderData.jobId;
-    showPanel('render');
-    listenProgress(state.jobId);
+    const channelData = audioBuffer.getChannelData(0); // mono / left
+    const W = canvas.width;
+    const H = canvas.height;
+    const ctx = canvas.getContext('2d');
 
-  } catch (err) {
-    showError(renderError, err.message);
-  } finally {
-    setLoading(btnRender, renderSpinner, btnRenderLabel, false, '🎬 Render Video');
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = 'rgba(54,214,160,0.08)';
+    ctx.fillRect(0, 0, W, H);
+
+    const samplesPerPixel = Math.floor(channelData.length / W);
+    const midY = H / 2;
+
+    // Gradient stroke
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0,   'rgba(54,214,160,0.9)');
+    grad.addColorStop(0.5, 'rgba(62,207,207,0.9)');
+    grad.addColorStop(1,   'rgba(54,214,160,0.9)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1;
+
+    ctx.beginPath();
+    for (let x = 0; x < W; x++) {
+      const start = x * samplesPerPixel;
+      let min = 0, max = 0;
+      for (let j = 0; j < samplesPerPixel; j++) {
+        const s = channelData[start + j] || 0;
+        if (s < min) min = s;
+        if (s > max) max = s;
+      }
+      const yTop    = midY - max * midY * 0.95;
+      const yBottom = midY - min * midY * 0.95;
+      ctx.moveTo(x + 0.5, yTop);
+      ctx.lineTo(x + 0.5, yBottom);
+    }
+    ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = 'rgba(54,214,160,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, midY);
+    ctx.lineTo(W, midY);
+    ctx.stroke();
+
+  } catch (e) {
+    console.warn('[waveform] Could not decode audio for waveform:', e.message);
   }
-});
+}
+
+async function renderTimeline() {
+  const trackVideo = $('track-video');
+  const trackAudio = $('track-audio');
+  const ruler = $('timeline-ruler');
+  
+  // Guarantee the first scene always anchors to 0s to cover initial silence
+  if (state.scenes && state.scenes.length > 0) {
+    state.scenes[0].start = 0;
+  }
+
+  if (state.file && audioPlayer) {
+    if (!audioPlayer.src) {
+      const audioBlob = state.file instanceof Blob ? state.file : null;
+      audioPlayer.src = URL.createObjectURL(state.file);
+      audioPlayer.onloadedmetadata = () => {
+        timelineDuration = Math.max(audioPlayer.duration || 60, state.scenes.length ? state.scenes[state.scenes.length-1].end : 0) + 10;
+        updateTimelineWidth();
+        // Draw real waveform once we know the total duration
+        if (audioBlob) scheduleWaveform(audioBlob);
+      };
+    }
+  }
+
+  if (!trackVideo) return;
+  timelineDuration = Math.max(
+    state.scenes.length ? state.scenes[state.scenes.length-1].end : 60,
+    audioPlayer.duration || 60
+  ) + 10; // add 10s buffer
+
+  updateTimelineWidth();
+
+  // Build clips — video clips get a placeholder first, then async thumbnail
+  trackVideo.innerHTML = state.scenes.map((scene, idx) => {
+    const isSlide = scene.type === 'slide';
+    const left = scene.start * pixelsPerSecond;
+    const width = (scene.end - scene.start) * pixelsPerSecond;
+    const cls = isSlide ? 'slide-clip' : 'video-clip';
+    const label = isSlide
+      ? `<span class="clip-slide-label">${escapeHtml(scene.slideText || 'Slide')}</span>`
+      : `<span class="clip-video-label">🎬 Video ${idx + 1}</span>`;
+
+    // Thumbnail placeholder for video clips (filled in async below)
+    const thumbEl = isSlide
+      ? ''
+      : `<img class="clip-thumbnail" id="thumb-${idx}" src="" alt="" style="opacity:0;">`;
+
+    return `
+      <div class="timeline-clip ${cls}" id="clip-${idx}" data-idx="${idx}" style="left: ${left}px; width: ${width}px;">
+        ${thumbEl}
+        <div class="clip-handle clip-handle-left" data-action="resize-left"></div>
+        <div class="clip-content">${label}</div>
+        <div class="clip-handle clip-handle-right" data-action="resize-right"></div>
+      </div>
+    `;
+  }).join('');
+
+  initTimelineInteractions();
+
+  // Async: generate real thumbnails for video clips
+  state.scenes.forEach((scene, idx) => {
+    if (scene.type === 'slide' || !scene.previewUrl) return;
+    const imgEl = $(`thumb-${idx}`);
+    if (!imgEl) return;
+    generateVideoThumbnail(scene.previewUrl)
+      .then(dataUrl => {
+        imgEl.src = dataUrl;
+        imgEl.style.opacity = '0.5';
+      })
+      .catch(() => {
+        // Thumbnail failed — just leave it hidden
+      });
+  });
+
+  // Draw waveform if audio is already loaded
+  if (state.file instanceof Blob && audioPlayer.readyState >= 1) {
+    scheduleWaveform(state.file);
+  }
+}
+
+/**
+ * Schedules waveform drawing after the timeline width is known.
+ * Uses a small timeout so the canvas has been sized by updateTimelineWidth first.
+ */
+function scheduleWaveform(audioBlob) {
+  setTimeout(() => {
+    const canvas = $('waveform-canvas');
+    if (!canvas) return;
+    const totalWidth = timelineDuration * pixelsPerSecond;
+    canvas.width  = totalWidth;
+    canvas.height = 60;
+    drawAudioWaveform(audioBlob, canvas);
+  }, 100);
+}
+
+function updateTimelineWidth() {
+  const totalWidth = timelineDuration * pixelsPerSecond;
+  const trackVideo = $('track-video');
+  const trackAudio = $('track-audio');
+  const ruler = $('timeline-ruler');
+  const audioVisual = $('audio-clip-visual');
+  
+  if (trackVideo) trackVideo.style.minWidth = `${totalWidth}px`;
+  if (trackAudio) trackAudio.style.minWidth = `${totalWidth}px`;
+  // Make the audio clip span the full timeline width
+  if (audioVisual) { audioVisual.style.width = `${totalWidth}px`; audioVisual.style.right = 'auto'; }
+  if (ruler) {
+    ruler.style.minWidth = `${totalWidth}px`;
+    // Draw ruler markings
+    let markings = '<div class="timeline-playhead" id="timeline-playhead"><div class="playhead-head"></div><div class="playhead-line"></div></div>';
+    for (let i = 0; i < timelineDuration; i += 5) {
+      markings += `<div style="position: absolute; left: ${i * pixelsPerSecond}px; bottom: 0; height: 10px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 4px; font-size: 10px; color: rgba(255,255,255,0.4); pointer-events: none;">${i}s</div>`;
+    }
+    ruler.innerHTML = markings;
+    initPlayhead();
+  }
+}
+
+function initTimelineInteractions() {
+  const trackVideo = $('track-video');
+  let activeDrag = null;
+  let startX = 0;
+  let startLeft = 0;
+  let startWidth = 0;
+  
+  trackVideo.onmousedown = (e) => {
+    const clip = e.target.closest('.timeline-clip');
+    if (!clip) return;
+    
+    const idx = clip.getAttribute('data-idx');
+    const isLeftHandle = e.target.classList.contains('clip-handle-left');
+    const isRightHandle = e.target.classList.contains('clip-handle-right');
+    
+    activeDrag = {
+      clip, idx,
+      type: isLeftHandle ? 'resize-left' : (isRightHandle ? 'resize-right' : 'move')
+    };
+    
+    startX = e.clientX;
+    startLeft = parseFloat(clip.style.left);
+    startWidth = parseFloat(clip.style.width);
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+  
+  function onMouseMove(e) {
+    if (!activeDrag) return;
+    
+    const dx = e.clientX - startX;
+    const scene = state.scenes[activeDrag.idx];
+    
+    if (activeDrag.type === 'move') {
+      let newLeft = startLeft + dx;
+      if (newLeft < 0) newLeft = 0;
+      activeDrag.clip.style.left = `${newLeft}px`;
+      scene.start = newLeft / pixelsPerSecond;
+      scene.end = scene.start + (startWidth / pixelsPerSecond);
+    } else if (activeDrag.type === 'resize-right') {
+      let newWidth = startWidth + dx;
+      if (newWidth < pixelsPerSecond) newWidth = pixelsPerSecond; // min 1s
+      activeDrag.clip.style.width = `${newWidth}px`;
+      scene.end = scene.start + (newWidth / pixelsPerSecond);
+    } else if (activeDrag.type === 'resize-left') {
+      let newLeft = startLeft + dx;
+      let newWidth = startWidth - dx;
+      if (newLeft < 0) { newWidth += newLeft; newLeft = 0; }
+      if (newWidth < pixelsPerSecond) { newLeft = startLeft + startWidth - pixelsPerSecond; newWidth = pixelsPerSecond; }
+      activeDrag.clip.style.left = `${newLeft}px`;
+      activeDrag.clip.style.width = `${newWidth}px`;
+      scene.start = newLeft / pixelsPerSecond;
+      scene.end = scene.start + (newWidth / pixelsPerSecond);
+    }
+  }
+  
+  function onMouseUp() {
+    activeDrag = null;
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+}
+
+function initPlayhead() {
+  const playhead = $('timeline-playhead');
+  const ruler = $('timeline-ruler');
+  if (!playhead || !audioPlayer) return;
+  
+  audioPlayer.ontimeupdate = () => {
+    const left = audioPlayer.currentTime * pixelsPerSecond;
+    playhead.style.left = `${left}px`;
+  };
+  
+  ruler.onmousedown = (e) => {
+    if (e.target.closest('.playhead-head')) return;
+    const rect = ruler.getBoundingClientRect();
+    const x = e.clientX - rect.left + ruler.parentElement.scrollLeft;
+    const time = x / pixelsPerSecond;
+    if (time <= audioPlayer.duration || isNaN(audioPlayer.duration)) {
+      audioPlayer.currentTime = time;
+    }
+  };
+  
+  const head = playhead.querySelector('.playhead-head');
+  let isDraggingPlayhead = false;
+  
+  if (head) {
+    head.onmousedown = (e) => {
+      isDraggingPlayhead = true;
+      document.addEventListener('mousemove', playheadMove);
+      document.addEventListener('mouseup', playheadUp);
+    };
+  }
+  
+  function playheadMove(e) {
+    if (!isDraggingPlayhead) return;
+    const rect = ruler.getBoundingClientRect();
+    let x = e.clientX - rect.left + ruler.parentElement.scrollLeft;
+    if (x < 0) x = 0;
+    const time = x / pixelsPerSecond;
+    if (time <= audioPlayer.duration || isNaN(audioPlayer.duration)) {
+      audioPlayer.currentTime = time;
+    }
+  }
+  
+  function playheadUp() {
+    isDraggingPlayhead = false;
+    document.removeEventListener('mousemove', playheadMove);
+    document.removeEventListener('mouseup', playheadUp);
+  }
+}
+
+/* ── Render ────────────────────────────────────────────── */
+if (btnRender) {
+  btnRender.addEventListener('click', async () => {
+    setLoading(btnRender, renderSpinner, btnRenderLabel, true, 'Starting…');
+    hideError(renderError);
+
+    try {
+      const renderRes = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          localPath: state.localPath,
+          segments: state.segments,
+          theme: state.selectedTheme,
+          scenes: state.scenes,
+          showCaptions: showCaptionsCheckbox ? showCaptionsCheckbox.checked : true,
+        }),
+      });
+      const renderData = await renderRes.json();
+      if (!renderRes.ok) throw new Error(renderData.error || 'Render request failed');
+
+      state.jobId = renderData.jobId;
+      if (audioPlayer) audioPlayer.pause();
+      showPanel('render');
+      listenProgress(state.jobId);
+
+    } catch (err) {
+      showError(renderError, err.message);
+    } finally {
+      setLoading(btnRender, renderSpinner, btnRenderLabel, false, '🎬 Compile Final Video');
+    }
+  });
+}
 
 /* ── SSE progress ──────────────────────────────────────── */
 function listenProgress(jobId) {

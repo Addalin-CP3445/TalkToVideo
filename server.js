@@ -17,11 +17,13 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/upload', require('./src/routes/upload'));
 app.use('/api/transcribe', require('./src/routes/transcribe'));
 app.use('/api/render', require('./src/routes/render'));
+app.use('/api/fetch-media', require('./src/routes/fetchMedia'));
 app.use('/api/debug', require('./src/routes/debug'));
 
 // Download endpoint
