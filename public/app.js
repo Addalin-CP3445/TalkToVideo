@@ -411,6 +411,59 @@ function listenFetchProgress(jobId) {
 
 const audioPlayer = $('audio-player');
 let timelineDuration = 60;
+
+/* ── Transport play/pause button ───────────────────────── */
+function initTransportControls() {
+  const btn        = $('btn-play-audio');
+  const iconPlay   = $('icon-play');
+  const iconPause  = $('icon-pause');
+  const curEl      = $('transport-current');
+  const totEl      = $('transport-total');
+
+  if (!btn || !audioPlayer) return;
+
+  function fmtMSS(t) {
+    if (!isFinite(t)) return '0:00';
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  btn.addEventListener('click', () => {
+    if (audioPlayer.paused) {
+      audioPlayer.play();
+    } else {
+      audioPlayer.pause();
+    }
+  });
+
+  audioPlayer.addEventListener('play', () => {
+    iconPlay.classList.add('hidden');
+    iconPause.classList.remove('hidden');
+    btn.classList.add('playing');
+  });
+
+  audioPlayer.addEventListener('pause', () => {
+    iconPause.classList.add('hidden');
+    iconPlay.classList.remove('hidden');
+    btn.classList.remove('playing');
+  });
+
+  audioPlayer.addEventListener('ended', () => {
+    iconPause.classList.add('hidden');
+    iconPlay.classList.remove('hidden');
+    btn.classList.remove('playing');
+  });
+
+  audioPlayer.addEventListener('timeupdate', () => {
+    if (curEl) curEl.textContent = fmtMSS(audioPlayer.currentTime);
+  });
+
+  audioPlayer.addEventListener('loadedmetadata', () => {
+    if (totEl) totEl.textContent = fmtMSS(audioPlayer.duration);
+  });
+}
+initTransportControls();
 const pixelsPerSecond = 40; // Timeline scale
 
 /**
@@ -646,7 +699,39 @@ function initTimelineInteractions() {
   let startX = 0;
   let startLeft = 0;
   let startWidth = 0;
-  
+
+  // ── Magnetic snap helpers ─────────────────────────────
+  // Snaps to the nearest neighbour edge within SNAP_PX pixels.
+  const SNAP_PX = 8; // pixels ≈ 0.2 s at 40 px/s
+
+  /**
+   * Collect all clip edge positions (left, right) except the active clip.
+   * Returns an array of pixel values to snap to.
+   */
+  function getSnapTargets(activeIdx) {
+    const targets = [0]; // also snap to timeline start
+    state.scenes.forEach((scene, idx) => {
+      if (String(idx) === String(activeIdx)) return;
+      targets.push(scene.start * pixelsPerSecond);
+      targets.push(scene.end   * pixelsPerSecond);
+    });
+    return targets;
+  }
+
+  /**
+   * Snap a pixel value to the nearest target if within SNAP_PX.
+   * Returns { snapped: boolean, value: number }.
+   */
+  function snapValue(px, targets) {
+    let best = null;
+    let bestDist = SNAP_PX + 1;
+    for (const t of targets) {
+      const d = Math.abs(px - t);
+      if (d < bestDist) { bestDist = d; best = t; }
+    }
+    return bestDist <= SNAP_PX ? { snapped: true, value: best } : { snapped: false, value: px };
+  }
+
   trackVideo.onmousedown = (e) => {
     const clip = e.target.closest('.timeline-clip');
     if (!clip) return;
@@ -673,31 +758,64 @@ function initTimelineInteractions() {
     
     const dx = e.clientX - startX;
     const scene = state.scenes[activeDrag.idx];
-    
+    const snapTargets = getSnapTargets(activeDrag.idx);
+
     if (activeDrag.type === 'move') {
       let newLeft = startLeft + dx;
       if (newLeft < 0) newLeft = 0;
-      activeDrag.clip.style.left = `${newLeft}px`;
+
+      // Snap leading edge
+      const snapL = snapValue(newLeft, snapTargets);
+      if (snapL.snapped) newLeft = snapL.value;
+      else {
+        // Snap trailing edge
+        const snapR = snapValue(newLeft + startWidth, snapTargets);
+        if (snapR.snapped) newLeft = snapR.value - startWidth;
+      }
+      if (newLeft < 0) newLeft = 0;
+
+      activeDrag.clip.style.left  = `${newLeft}px`;
+      activeDrag.clip.classList.toggle('snapping', snapL.snapped);
       scene.start = newLeft / pixelsPerSecond;
-      scene.end = scene.start + (startWidth / pixelsPerSecond);
+      scene.end   = scene.start + (startWidth / pixelsPerSecond);
+
     } else if (activeDrag.type === 'resize-right') {
       let newWidth = startWidth + dx;
-      if (newWidth < pixelsPerSecond) newWidth = pixelsPerSecond; // min 1s
+      if (newWidth < pixelsPerSecond) newWidth = pixelsPerSecond;
+
+      // Snap trailing edge
+      const snapR = snapValue(startLeft + newWidth, snapTargets);
+      if (snapR.snapped) newWidth = snapR.value - startLeft;
+      if (newWidth < pixelsPerSecond) newWidth = pixelsPerSecond;
+
       activeDrag.clip.style.width = `${newWidth}px`;
+      activeDrag.clip.classList.toggle('snapping', snapR.snapped);
       scene.end = scene.start + (newWidth / pixelsPerSecond);
+
     } else if (activeDrag.type === 'resize-left') {
-      let newLeft = startLeft + dx;
+      let newLeft  = startLeft + dx;
       let newWidth = startWidth - dx;
       if (newLeft < 0) { newWidth += newLeft; newLeft = 0; }
       if (newWidth < pixelsPerSecond) { newLeft = startLeft + startWidth - pixelsPerSecond; newWidth = pixelsPerSecond; }
-      activeDrag.clip.style.left = `${newLeft}px`;
+
+      // Snap leading edge
+      const snapL = snapValue(newLeft, snapTargets);
+      if (snapL.snapped) {
+        newWidth = (startLeft + startWidth) - snapL.value;
+        newLeft  = snapL.value;
+        if (newWidth < pixelsPerSecond) { newWidth = pixelsPerSecond; newLeft = startLeft + startWidth - pixelsPerSecond; }
+      }
+
+      activeDrag.clip.style.left  = `${newLeft}px`;
       activeDrag.clip.style.width = `${newWidth}px`;
+      activeDrag.clip.classList.toggle('snapping', snapL.snapped);
       scene.start = newLeft / pixelsPerSecond;
-      scene.end = scene.start + (newWidth / pixelsPerSecond);
+      scene.end   = scene.start + (newWidth / pixelsPerSecond);
     }
   }
   
   function onMouseUp() {
+    if (activeDrag) activeDrag.clip.classList.remove('snapping');
     activeDrag = null;
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);

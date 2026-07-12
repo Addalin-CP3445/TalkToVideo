@@ -683,6 +683,73 @@ body {
 /* ── Utilities ─────────────────────────────────────────── */
 .hidden { display: none !important; }
 
+/* ── Timeline Transport Bar ──────────────────────────────── */
+.timeline-transport {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--clr-surface-2);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1rem;
+}
+
+.transport-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--clr-accent);
+  background: rgba(124,108,240,0.12);
+  color: var(--clr-accent);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.transport-btn:hover {
+  background: rgba(124,108,240,0.25);
+  transform: scale(1.08);
+  box-shadow: 0 0 16px rgba(124,108,240,0.4);
+}
+
+.transport-btn.playing {
+  background: rgba(124,108,240,0.25);
+  box-shadow: 0 0 20px rgba(124,108,240,0.55);
+  animation: pulse-ring 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124,108,240,0.55); }
+  50%       { box-shadow: 0 0 0 8px rgba(124,108,240,0); }
+}
+
+.transport-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--clr-text);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 90px;
+}
+
+.transport-sep {
+  color: var(--clr-muted);
+  font-weight: 400;
+}
+
+.transport-hint {
+  flex: 1;
+  font-size: 0.75rem;
+  color: var(--clr-muted);
+  text-align: right;
+}
+
 /* ── Timeline Editor ─────────────────────────────────────── */
 .timeline-editor {
   width: 100%;
@@ -694,6 +761,12 @@ body {
   flex-direction: column;
   position: relative;
   user-select: none;
+}
+
+/* Magnetic snap highlight */
+.timeline-clip.snapping {
+  border-color: var(--clr-success) !important;
+  box-shadow: 0 0 8px rgba(54,214,160,0.6) !important;
 }
 
 

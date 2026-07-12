@@ -163,6 +163,23 @@
         <h2 class="panel-title">Fine-Tune Timeline</h2>
         <p class="panel-subtitle">Review downloaded videos and adjust scene durations</p>
 
+        <!-- Transport bar -->
+        <div class="timeline-transport" id="timeline-transport">
+          <button class="transport-btn" id="btn-play-audio" aria-label="Play / Pause" title="Play / Pause audio">
+            <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" width="20" height="20" class="hidden"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <div class="transport-time">
+            <span id="transport-current">0:00</span>
+            <span class="transport-sep">/</span>
+            <span id="transport-total">0:00</span>
+          </div>
+          <div class="transport-hint">Click ruler to seek · drag playhead to scrub</div>
+        </div>
+
+        <!-- Hidden audio element (controlled by JS) -->
+        <audio id="audio-player" style="display:none;"></audio>
+
         <div class="timeline-editor" id="timeline-editor">
           <div class="timeline-tracks" id="timeline-tracks">
             
@@ -201,11 +218,7 @@
           </div>
         </div>
 
-        <div style="margin-top: 15px; text-align: center; margin-bottom: 20px;">
-          <audio id="audio-player" controls style="width: 100%; height: 40px; outline: none; border-radius: 8px; background: rgba(0,0,0,0.3);"></audio>
-        </div>
-
-        <button class="btn btn-primary" id="btn-render">
+        <button class="btn btn-primary" id="btn-render" style="margin-top: 1rem;">
           <span class="btn-spinner hidden" id="render-spinner"></span>
           <span id="btn-render-label">🎬 Compile Final Video</span>
         </button>
