@@ -38,9 +38,7 @@ const doneBox         = $('done-box');
 const downloadLink    = $('download-link');
 const creditsLink     = $('credits-link');
 const btnRestart      = $('btn-restart');
-const btnDebug        = $('btn-debug');
-const btnDebugLabel   = $('btn-debug-label');
-const debugSpinner    = $('debug-spinner');
+
 
 /* ── Step management ───────────────────────────────────── */
 const PANELS = ['upload', 'transcribe', 'theme', 'timeline', 'render'];
@@ -116,80 +114,6 @@ function handleFile(file) {
   btnUpload.disabled = false;
 }
 
-/* ── Debug Mode ────────────────────────────────────────── */
-btnDebug.addEventListener('click', async () => {
-  setLoading(btnDebug, debugSpinner, btnDebugLabel, true, 'Loading mock data…');
-  hideError(uploadError);
-
-  try {
-    const res = await fetch('/api/debug/mock');
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Debug endpoint failed');
-
-    // Inject mock state — no Gemini API calls made
-    state.localPath     = data.localPath;
-    state.fileUri       = null;
-    state.geminiName    = null;
-    state.mimeType      = 'audio/mpeg';
-    state.segments      = data.segments;
-    state.scenes        = data.scenes;
-
-    // Show fake file info in the preview (optional, cosmetic)
-    fileNameEl.textContent = data.originalName;
-    fileSizeEl.textContent = formatBytes(data.size);
-
-    await loadThemes();
-    renderTranscriptPreview();
-    renderScenesList();
-    showPanel('theme');
-
-  } catch (err) {
-    showError(uploadError, '🧪 Debug mode error: ' + err.message);
-  } finally {
-    setLoading(btnDebug, debugSpinner, btnDebugLabel, false, '🧪 Debug Mode (skip Gemini)');
-  }
-});
-
-const btnDebugEditor = $('btn-debug-editor');
-if (btnDebugEditor) {
-  btnDebugEditor.addEventListener('click', async () => {
-    hideError(uploadError);
-    btnDebugEditor.textContent = 'Loading…';
-    btnDebugEditor.disabled = true;
-
-    try {
-      const res = await fetch('/api/debug/mock');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Debug endpoint failed');
-
-      state.localPath = data.localPath;
-      state.segments = data.segments;
-      state.scenes = data.scenes.map(s => ({
-        ...s,
-        type: 'slide',
-        slideText: `Debug Slide: ${s.searchQuery}`
-      }));
-
-      // Set file data for local playback
-      state.file = new File([new ArrayBuffer(1)], 'mock.mp3', { type: 'audio/mpeg' }); 
-      // The backend actually gives a real path for rendering, but frontend needs a blob for audioPlayer
-      // To properly play it, we can fetch it, but that's slow. We'll just let audioPlayer fail or use the mock blob
-      // Wait, let's just fetch it as a blob!
-      const audioRes = await fetch(`/uploads/_debug_silence.mp3`);
-      if (audioRes.ok) {
-        state.file = await audioRes.blob();
-      }
-
-      renderTimeline();
-      showPanel('timeline');
-    } catch (err) {
-      showError(uploadError, '🧪 Editor Debug error: ' + err.message);
-    } finally {
-      btnDebugEditor.textContent = '⏭ Direct to Editor (Fast)';
-      btnDebugEditor.disabled = false;
-    }
-  });
-}
 
 /* ── Upload & transcribe ───────────────────────────────── */
 btnUpload.addEventListener('click', async () => {

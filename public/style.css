@@ -631,54 +631,6 @@ body {
   font-size: 0.8rem;
 }
 
-/* ── Debug button ──────────────────────────────────────── */
-.btn-debug {
-  background: rgba(255, 196, 64, 0.1);
-  color: #ffc440;
-  border: 1px dashed rgba(255, 196, 64, 0.45);
-  font-size: 0.88rem;
-  min-width: 200px;
-  transition: var(--transition);
-}
-
-.btn-debug:hover:not(:disabled) {
-  background: rgba(255, 196, 64, 0.18);
-  border-color: rgba(255, 196, 64, 0.75);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 18px rgba(255, 196, 64, 0.2);
-}
-
-.btn-debug:active:not(:disabled) { transform: translateY(0); }
-
-.btn-debug:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.debug-divider {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  color: var(--clr-muted);
-  font-size: 0.78rem;
-}
-
-.debug-divider::before,
-.debug-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--clr-border);
-}
-
-.debug-hint {
-  font-size: 0.72rem;
-  color: var(--clr-muted);
-  text-align: center;
-  margin-top: -0.75rem;
-  opacity: 0.7;
-}
 
 /* ── Utilities ─────────────────────────────────────────── */
 .hidden { display: none !important; }
