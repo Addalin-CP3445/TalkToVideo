@@ -858,6 +858,18 @@ function listenProgress(jobId) {
         creditsLink.classList.add('hidden');
       }
 
+      // Mark step 5 (Render) bubble green / done
+      const step5 = $('step-indicator-5');
+      if (step5) {
+        step5.classList.remove('active');
+        step5.classList.add('done');
+        const bubble = step5.querySelector('.step-bubble');
+        if (bubble) bubble.textContent = '✓';
+      }
+
+      // Open the outputs folder in Explorer
+      fetch('/api/open-output-folder', { method: 'POST' }).catch(() => {});
+
       doneBox.classList.remove('hidden');
     }
 

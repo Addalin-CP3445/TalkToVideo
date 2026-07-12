@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,24 @@ app.get('/api/download/:filename', (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
   res.download(filePath);
+});
+
+// Open the outputs folder in Windows Explorer
+app.post('/api/open-output-folder', (req, res) => {
+  const outputsDir = path.join(__dirname, 'outputs');
+  // Use 'explorer' on Windows; falls back gracefully on other platforms
+  const cmd = process.platform === 'darwin'
+    ? `open "${outputsDir}"`
+    : process.platform === 'linux'
+      ? `xdg-open "${outputsDir}"`
+      : `explorer "${outputsDir}"`;
+  exec(cmd, (err) => {
+    if (err) {
+      console.warn('[open-folder] Could not open explorer:', err.message);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json({ ok: true });
+  });
 });
 
 // Health check
