@@ -7,3 +7,4 @@ outputs/
 *.mp4
 gdg-project.json
 venv/*
+graphify-out/*
